@@ -62,3 +62,17 @@ Thumbs.db
 
 .vscode/
 .idea/
+
+# =====================================
+# Generated submission artifacts
+# =====================================
+
+docs/report.pdf
+*.tar.gz
+
+# LaTeX build byproducts (report.tex -> report.pdf)
+*.aux
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc

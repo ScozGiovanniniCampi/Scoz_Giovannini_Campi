@@ -1,0 +1,36 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+\title{Operating Systems Laboratory Project --- Library}
+\author{Scoz \and Giovannini \and Campi}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+This project implements a distributed library system for the Operating Systems laboratory.
+Multiple library processes cooperate to serve user requests (register, search, borrow, return) and
+to move books between libraries when necessary.
+
+\section{Architecture}
+Describe the main processes/components you implemented (libraries, user script, management script)
+and their responsibilities.
+
+\section{IPC and Protocol}
+State which IPC mechanism you selected (e.g., FIFOs, message queues, sockets) and motivate the
+choice. Summarize the messages/commands exchanged between libraries.
+
+\section{Concurrency and Consistency}
+Explain whether requests are handled serially or concurrently, how you keep the system consistent
+(no double lending), and how the required random processing delay is implemented.
+
+\section{Build and Run}
+Document the entry point you provide (\texttt{Makefile} targets \texttt{build/clean/run} or
+\texttt{build.sh}) and a minimal scenario that demonstrates the system.
+
+\end{document}

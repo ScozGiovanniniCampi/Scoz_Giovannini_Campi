@@ -45,6 +45,19 @@ The assignment states that each book exists exactly once in the system, so the c
 
 Commit messages should follow the Conventional Commits specification and align with the [SemVer specification](https://semver.org/). See [COMMIT_GUIDE.md](COMMIT_GUIDE.md) for a project-specific summary and examples.
 
+## CI: report + release
+
+This repository includes a GitHub Actions workflow that:
+
+- regenerates `docs/report.pdf` from `docsrc/report.tex` on every push
+- creates a submission archive named `Scoz_Giovannini_Campi.tar.gz` containing `docs/report.pdf` and `code/`
+- publishes a GitHub Release on pushes to `main` when the configured semver tag does not exist yet
+
+Release settings live in `release.config.json`:
+
+- bump `version` to publish a new release (tag format is `{tagPrefix}{version}`, e.g. `v0.2.0`)
+- `archiveName` controls the produced `.tar.gz` filename
+
 ## License
 
 This project uses the MIT License. See [LICENSE](LICENSE).
