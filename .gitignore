@@ -1,75 +1,46 @@
 # =====================================
 # Build artifacts
-# =====================================
 
 # Object files
 *.o
-
 # Dependency files (gcc -MMD -MP)
 *.d
-
 # Static / shared libraries
 *.a
 *.so
-
 # Executables (common output names)
 *.out
 *.elf
-
 # If you output binaries into these folders
 bin/
 build/
 obj/
 out/
 dist/
-
-# =====================================
 # Debug / profiling / coverage
-# =====================================
-
 gmon.out
 *.gcno
 *.gcda
 *.gcov
 *.prof
-
-# =====================================
 # Logs
-# =====================================
-
 *.log
-
-# =====================================
 # Temporary files
-# =====================================
-
 *.tmp
 *.swp
 *.swo
 *~
 .#*
-
-# =====================================
 # OS junk
-# =====================================
-
 .DS_Store
 Thumbs.db
-
-# =====================================
+desktop.ini
 # Editors
-# =====================================
-
 .vscode/
 .idea/
-
-# =====================================
 # Generated submission artifacts
-# =====================================
-
 docs/report.pdf
 *.tar.gz
-
 # LaTeX build byproducts (report.tex -> report.pdf)
 *.aux
 *.fdb_latexmk
