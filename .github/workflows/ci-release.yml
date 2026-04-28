@@ -1,0 +1,113 @@
+name: build-report-and-release
+
+on:
+    push:
+
+permissions:
+    contents: write
+
+jobs:
+    build-package:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Compile report.pdf
+              uses: xu-cheng/latex-action@v3
+              with:
+                  root_file: docsrc/report.tex
+                  args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
+
+            - name: Move generated PDF to docs/
+              shell: bash
+              run: |
+                  mkdir -p docs
+                  if [ -f docsrc/report.pdf ]; then
+                    mv docsrc/report.pdf docs/report.pdf
+                  else
+                    echo "ERROR: expected docsrc/report.pdf not found" >&2
+                    exit 1
+                  fi
+
+            - name: Read release config
+              id: relcfg
+              shell: bash
+              run: |
+                  python3 - <<'PY'
+                  import json
+                  import os
+                  import re
+
+                  with open('release.config.json', 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+
+                  version = str(cfg.get('version', '')).strip()
+                  prefix = str(cfg.get('tagPrefix', 'v')).strip()
+                  archive = str(cfg.get('archiveName', 'Scoz_Giovannini_Campi.tar.gz')).strip()
+                  name_tmpl = str(cfg.get('releaseNameTemplate', '{tag}'))
+                  draft = bool(cfg.get('draft', False))
+                  prerelease = bool(cfg.get('prerelease', False))
+
+                  semver_re = re.compile(r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')
+                  if not semver_re.match(version):
+                    raise SystemExit(f"Invalid semver in release.config.json: {version!r}")
+                  if prefix and not re.match(r'^[A-Za-z0-9._-]*$', prefix):
+                    raise SystemExit(f"Invalid tagPrefix in release.config.json: {prefix!r}")
+                  if not archive.endswith('.tar.gz'):
+                    raise SystemExit(f"archiveName must end with .tar.gz: {archive!r}")
+                  if '/' in archive or '\\' in archive:
+                    raise SystemExit(f"archiveName must be a plain filename: {archive!r}")
+
+                  tag = f"{prefix}{version}"
+                  release_name = name_tmpl.format(version=version, tag=tag)
+
+                  out = os.environ['GITHUB_OUTPUT']
+                  with open(out, 'a', encoding='utf-8') as f:
+                    f.write(f"version={version}\n")
+                    f.write(f"tag={tag}\n")
+                    f.write(f"archive={archive}\n")
+                    f.write(f"release_name={release_name}\n")
+                    f.write(f"draft={'true' if draft else 'false'}\n")
+                    f.write(f"prerelease={'true' if prerelease else 'false'}\n")
+                  PY
+
+            - name: Create submission archive
+              shell: bash
+              run: |
+                  tar -czf "${{ steps.relcfg.outputs.archive }}" docs/report.pdf code
+
+            - name: Upload CI artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: submission
+                  path: |
+                      docs/report.pdf
+                      ${{ steps.relcfg.outputs.archive }}
+
+            - name: Check if tag already exists
+              id: tagexists
+              shell: bash
+              run: |
+                  if git show-ref --tags --quiet --verify "refs/tags/${{ steps.relcfg.outputs.tag }}"; then
+                    echo "exists=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "exists=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Create GitHub Release
+              if: github.ref == 'refs/heads/main' && steps.tagexists.outputs.exists == 'false'
+              uses: softprops/action-gh-release@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ steps.relcfg.outputs.tag }}
+                  name: ${{ steps.relcfg.outputs.release_name }}
+                  draft: ${{ steps.relcfg.outputs.draft }}
+                  prerelease: ${{ steps.relcfg.outputs.prerelease }}
+                  generate_release_notes: true
+                  files: |
+                      ${{ steps.relcfg.outputs.archive }}
+                      docs/report.pdf

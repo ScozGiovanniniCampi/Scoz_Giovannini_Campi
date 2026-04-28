@@ -1,0 +1,8 @@
+{
+  "version": "0.1.0",
+  "tagPrefix": "v",
+  "archiveName": "Scoz_Giovannini_Campi.tar.gz",
+  "releaseNameTemplate": "{tag}",
+  "draft": false,
+  "prerelease": false
+}
