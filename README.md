@@ -10,7 +10,7 @@ The assignment also requires:
 
 - a C implementation for the library processes
 - Bash scripts for user interaction and system management
-- a build entry point, either a `Makefile` or a `build.sh` script
+- a `Makefile` as the build entry point (use `make build`, `make run`, and `make clean`).
 - a short report in PDF format describing the design choices
 
 ## Current Repository Layout
@@ -38,7 +38,7 @@ The assignment states that each book exists exactly once in the system, so the c
 
 - Keep implementation files under `code/` unless you have a reason to reorganize the project.
 - Prefer a clear separation between the library process, the user script, and the management script.
-- If you add a `Makefile` or `build.sh`, make sure it supports `build`, `clean`, and `run` as required by the assignment.
+- Use the `Makefile` as the entry point and ensure it supports `build`, `clean`, and `run` as required by the assignment.
 - The course instructions require the final submission archive to include `report.pdf` and the `code/` folder.
 
 ## Commit Style
