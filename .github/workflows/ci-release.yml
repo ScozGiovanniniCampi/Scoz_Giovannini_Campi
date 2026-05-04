@@ -18,7 +18,8 @@ jobs:
             - name: Compile report.pdf
               uses: xu-cheng/latex-action@v3
               with:
-                  root_file: docsrc/report.tex
+                  root_file: report.tex
+                  working_directory: docsrc
                   args: -pdf -file-line-error -halt-on-error -interaction=nonstopmode
 
             - name: Move generated PDF to docs/
