@@ -1,2 +1,51 @@
+# Compiler selection: use GCC by default.
 CC = gcc
-CFLAGS = 
+
+# Compiler flags: enable warnings, treat warnings as errors, use C11, and include debug symbols.
+CFLAGS = -Wall -Wextra -Werror -std=c11 -g
+
+# Linker flags: empty by default, but can be extended if needed.
+LDFLAGS =
+
+# Source and expected output locations.
+SRC_DIR = code/src
+BIN_DIR = code
+TARGET = $(BIN_DIR)/library
+
+# Collect all C source files from the source directory.
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+
+# Derive object file names from source file names, placing them in BIN_DIR.
+OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BIN_DIR)/%.o)
+
+# Default runtime arguments, overridable from the command line.
+BOOKS_FILE ?= code/books.csv
+LIBRARY_ID ?= 0
+
+# Declare phony targets so make does not confuse them with actual files.
+.PHONY: all build run clean
+
+# Default target: build the project.
+all: build
+
+# Build target depends on the final executable.
+build: $(TARGET)
+
+# Link all object files into the executable.
+$(TARGET): $(OBJS)
+	$(CC) $(LDFLAGS) $^ -o $@
+
+# Compile each source file into an object file.
+# The directory is created on demand before compiling.
+$(BIN_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
+
+# Run the built program with the configured library ID and books file.
+run: build
+	@echo "Running $(TARGET) with ID=$(LIBRARY_ID) and books=$(BOOKS_FILE)"
+	$(TARGET) $(LIBRARY_ID) $(BOOKS_FILE)
+
+# Remove compiled artifacts and the executable.
+clean:
+	rm -f $(BIN_DIR)/*.o $(TARGET)
