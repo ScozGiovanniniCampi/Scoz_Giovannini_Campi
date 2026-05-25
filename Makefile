@@ -10,14 +10,15 @@ LDFLAGS =
 
 # Source and expected output locations.
 SRC_DIR = code/src
-BIN_DIR = code
-TARGET = $(BIN_DIR)/library
+BUILD_DIR = build
+OBJ_DIR = $(BUILD_DIR)/obj
+TARGET = $(BUILD_DIR)/library
 
 # Collect all C source files from the source directory.
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 
-# Derive object file names from source file names, placing them in BIN_DIR.
-OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BIN_DIR)/%.o)
+# Derive object file names from source file names, placing them in OBJ_DIR.
+OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 # Default runtime arguments, overridable from the command line.
 BOOKS_FILE ?= code/books.csv
@@ -34,12 +35,13 @@ build: $(TARGET)
 
 # Link all object files into the executable.
 $(TARGET): $(OBJS)
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 # Compile each source file into an object file.
 # The directory is created on demand before compiling.
-$(BIN_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(BIN_DIR)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
 # Run the built program with the configured library ID and books file.
@@ -49,4 +51,4 @@ run: build
 
 # Remove compiled artifacts and the executable.
 clean:
-	rm -f $(BIN_DIR)/*.o $(TARGET)
+	rm -rf $(BUILD_DIR)
