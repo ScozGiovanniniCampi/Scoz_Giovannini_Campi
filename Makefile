@@ -1,8 +1,9 @@
 # Compiler selection: use GCC by default.
 CC = gcc
 
-# Compiler flags: enable warnings, treat warnings as errors, use C11, and include debug symbols.
-CFLAGS = -Wall -Wextra -Werror -std=c11 -g
+# Compiler flags: enable warnings, treat warnings as errors, use C11, include debug symbols,
+# and expose POSIX interfaces such as strnlen.
+CFLAGS = -Wall -Wextra -Werror -std=c11 -g -D_POSIX_C_SOURCE=200809L
 
 # Linker flags: empty by default, but can be extended if needed.
 LDFLAGS =

@@ -13,7 +13,8 @@ int main(int argc, char *argv[]) {
 
     unsigned int libraryId = atoi(argv[1]);
     Book *books = loadBooksFromFile(argv[2]);
-    BorrowedBook *borrowedBooks = NULL;
+
+    (void)libraryId;
 
     for (Book *b = books; b != NULL; b = b->hh.next) {
         printf("Book: %s by %s (%d)\n", b->title, b->author, b->publicationYear);
