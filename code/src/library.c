@@ -12,12 +12,17 @@ int main(int argc, char *argv[]) {
     }
 
     unsigned int libraryId = atoi(argv[1]);
-    Book *books = loadBooksFromFile(argv[2]);
+    BookVector *books = loadBooksFromFile(argv[2]);
 
     (void)libraryId;
 
-    for (Book *b = books; b != NULL; b = b->hh.next) {
-        printf("Book: %s by %s (%d)\n", b->title, b->author, b->publicationYear);
+    if (books) {
+        for (size_t i = 0; i < books->size; ++i) {
+            Book *b = &books->data[i];
+            printf("Book: %s by %s (%d)\n", b->title, b->author, b->publicationYear);
+        }
+        free_book_vector(books);
+        free(books);
     }
 
     return 0;

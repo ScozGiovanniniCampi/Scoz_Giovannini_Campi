@@ -1,5 +1,6 @@
 #include "book_loader.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 static void parse_field(char **p, char *dst, size_t dst_size) {
     char *s = *p;
@@ -46,11 +47,16 @@ static int parse_csv_line(char *line, char *title, size_t title_len, char *autho
     return 1;
 }
 
-Book *loadBooksFromFile(const char *filename) {
-    Book *books = NULL;
+BookVector *loadBooksFromFile(const char *filename) {
+    BookVector *books = calloc(1, sizeof(*books));
+    if (!books) {
+        perror("calloc");
+        return NULL;
+    }
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Could not open file");
+        free(books);
         return NULL;
     }
 
@@ -62,6 +68,7 @@ Book *loadBooksFromFile(const char *filename) {
     if ((nread = getline(&line, &len, file)) == -1) {
         free(line);
         fclose(file);
+        free(books);
         return NULL;
     }
 
@@ -71,18 +78,12 @@ Book *loadBooksFromFile(const char *filename) {
         while (*p == ' ' || *p == '\t') p++;
         if (*p == '\0') continue;
 
-        Book *b = malloc(sizeof(*b));
-        if (!b) {
-            perror("malloc");
-            break;
-        }
-
-        if (!parse_csv_line(line, b->title, MAX_TITLE_LENGTH, b->author, MAX_AUTHOR_LENGTH, &b->publicationYear)) {
-            free(b);
+        Book b;
+        if (!parse_csv_line(line, b.title, MAX_TITLE_LENGTH, b.author, MAX_AUTHOR_LENGTH, &b.publicationYear)) {
             continue;
         }
-        b->status = AVAILABLE;
-        add_book_to_hash(&books, b);
+        b.status = AVAILABLE;
+        add_book_to_vector(books, &b);
     }
 
     free(line);
