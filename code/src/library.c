@@ -10,6 +10,74 @@
 #include "book_loader.h"
 #include "operations.h"
 
+void* pthread_run (void* arg) {
+    int cfd = (int)arg;
+    OperationType op_code = read_operator(cfd);
+
+    char** args;
+    size_t* sizes;
+    int counter = 0;
+
+    char* tmp;
+    int tmp_size;
+
+    while ((tmp_size = read_argument(cfd, &tmp)) > 0) {
+        sizes = realloc(sizes, (++counter) * sizeof(size_t));
+        sizes[counter - 1] = tmp_size;
+        args = realloc(args, (counter) * sizeof(char*));
+        args[counter - 1] = tmp;
+    }
+
+    free(tmp);
+    counter--; // Decrement counter to exclude the last empty string
+
+    sleep(rand() % 5 + 1);
+
+    switch (op_code) {
+        case OP_ANSWER:
+            // Handle OP_ANSWER
+            break;
+        case OP_REGISTER:
+            // Handle OP_REGISTER
+            break;
+        case OP_SEARCH:
+            // Handle OP_SEARCH
+            break;
+        case OP_SEARCH_RESULT:
+            // Handle OP_SEARCH_RESULT
+            break;
+        case OP_BORROW:
+            // Handle OP_BORROW
+            break;
+        case OP_RETURN:
+            // Handle OP_RETURN
+            break;
+        case OP_GET_USERS:
+            // Handle OP_GET_USERS
+            break;
+        case OP_USERS_RESULT:
+            // Handle OP_USERS_RESULT
+            break;
+        case OP_GET_BOOKS:
+            // Handle OP_GET_BOOKS
+            break;
+        case OP_BOOKS_RESULT:
+            // Handle OP_BOOKS_RESULT
+            break;
+        default:
+            fprintf(stderr, "Unknown operation: %c\n", buffer[0]);
+            break;
+    }
+
+    lseek(cfd, 1, SEEK_CUR); // Skip the END_OF_TRANSMISSION character for the next read
+    for (int i = 0; i < counter; i++) {
+        free(args[i]);
+    }
+    free(args);
+    free(sizes);
+    close(cfd);
+}
+
 void loop(LibrarySocket *sock) {
     while (1) {
         int cfd = accept(sock->fd, NULL, NULL);
@@ -17,55 +85,27 @@ void loop(LibrarySocket *sock) {
             perror("accept");
             continue;
         }
-        OperationType op_code = reasock(cfd);
-        switch (op_code) {
-            case OP_ANSWER:
-                char* error = reasock(cfd);
-                break;
-            case OP_REGISTER:
-                // Handle OP_REGISTER
-                break;
-            case OP_SEARCH:
-                // Handle OP_SEARCH
-                break;
-            case OP_SEARCH_RESULT:
-                // Handle OP_SEARCH_RESULT
-                break;
-            case OP_BORROW:
-                // Handle OP_BORROW
-                break;
-            case OP_BORROW_RESULT:
-                // Handle OP_BORROW_RESULT
-                break;
-            case OP_RETURN:
-                // Handle OP_RETURN
-                break;
-            case OP_GET_USERS:
-                // Handle OP_GET_USERS
-                break;
-            case OP_GET_BOOKS:
-                // Handle OP_GET_BOOKS
-                break;
-            default:
-                fprintf(stderr, "Unknown operation: %c\n", buffer[0]);
-                break;
-            }
+        pthread_t thread_id;
+        if (pthread_create(&thread_id, NULL, pthread_run, (void*)cfd) != 0) {
+            perror("pthread_create");
+            close(cfd);
+        } else {
+            pthread_detach(thread_id); // Detach the thread to clean up resources when it finishes
         }
-        if (numRead < 0) {
-            perror("read");
-        }
-        close(cfd);
     }
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("Usage: %s <ID> <books_file.csv>\n", argv[0]);
+    if (argc != 4) {
+        printf("Usage: %s <library_id> <num_total_libraries> <catalog_file.csv>\n", argv[0]);
         return 1;
     }
 
+    srand(time(NULL)); // Initialize random seed
+
     unsigned int libraryId = atoi(argv[1]);
-    BookVector *books = loadBooksFromFile(argv[2]);
+    unsigned int numTotalLibraries = atoi(argv[2]);
+    BookVector *books = loadBooksFromFile(argv[3]);
 
     LibrarySocket sock;
     if (socket_init_server(&sock, libraryId) < 0) {

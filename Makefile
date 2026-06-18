@@ -44,7 +44,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 # Run the built program with the configured library ID and books file.
 run: build
 	@echo "Running $(TARGET) with ID=$(LIBRARY_ID) and books=$(BOOKS_FILE)"
-	$(TARGET) $(LIBRARY_ID) $(BOOKS_FILE)
+	$(TARGET) $(LIBRARY_ID) 1 $(BOOKS_FILE)
 
 # Remove compiled artifacts and the executable.
 clean:
