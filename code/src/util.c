@@ -27,7 +27,7 @@ void add_book_to_vector_borrowed(BorrowedBookVector *vector, const BorrowedBook 
     vector->data[vector->size++] = *borrowedBook;
 }
 
-void free_book_vector(BookVector *vector) {
+void free_book_vector_normal(BookVector *vector) {
     if (vector) {
         free(vector->data);
         vector->data = NULL;
