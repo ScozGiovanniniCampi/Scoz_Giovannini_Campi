@@ -9,11 +9,13 @@
 BookVector global_book_vector = {0};
 BorrowedBookVector global_borrowed_book_vector = {0};
 RegisteredUserVector global_user_vector = {0};
+unsigned int libraryId = 0;
+unsigned int num_total_libraries = 0;
 
-void add_book_to_vector_normal(BookVector *vector, const Book *book) {
+void add_book_to_vector_normal(BookVector* vector, const Book* book) {
     if (vector->size >= vector->capacity) {
         size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
-        Book *new_data = realloc(vector->data, new_capacity * sizeof(Book));
+        Book* new_data = realloc(vector->data, new_capacity * sizeof(Book));
         if (!new_data) {
             return;
         }
@@ -23,10 +25,10 @@ void add_book_to_vector_normal(BookVector *vector, const Book *book) {
     vector->data[vector->size++] = *book;
 }
 
-void add_book_to_vector_borrowed(BorrowedBookVector *vector, const BorrowedBook *borrowedBook) {
+void add_book_to_vector_borrowed(BorrowedBookVector* vector, const BorrowedBook* borrowedBook) {
     if (vector->size >= vector->capacity) {
         size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
-        BorrowedBook *new_data = realloc(vector->data, new_capacity * sizeof(BorrowedBook));
+        BorrowedBook* new_data = realloc(vector->data, new_capacity * sizeof(BorrowedBook));
         if (!new_data) {
             return;
         }
@@ -36,11 +38,11 @@ void add_book_to_vector_borrowed(BorrowedBookVector *vector, const BorrowedBook 
     vector->data[vector->size++] = *borrowedBook;
 }
 
-Book *remove_book_from_vector_normal(BookVector *vector, size_t index) {
+Book* remove_book_from_vector_normal(BookVector* vector, size_t index) {
     if (index >= vector->size) {
         return NULL;  // Index out of bounds
     }
-    Book *removed_book = malloc(sizeof(Book));
+    Book* removed_book = malloc(sizeof(Book));
     if (!removed_book) {
         return NULL;  // Memory allocation failed
     }
@@ -52,11 +54,11 @@ Book *remove_book_from_vector_normal(BookVector *vector, size_t index) {
     return removed_book;
 }
 
-BorrowedBook *remove_book_from_vector_borrowed(BorrowedBookVector *vector, size_t index) {
+BorrowedBook* remove_book_from_vector_borrowed(BorrowedBookVector* vector, size_t index) {
     if (index >= vector->size) {
         return NULL;  // Index out of bounds
     }
-    BorrowedBook *removed_book = malloc(sizeof(BorrowedBook));
+    BorrowedBook* removed_book = malloc(sizeof(BorrowedBook));
     if (!removed_book) {
         return NULL;  // Memory allocation failed
     }
@@ -68,25 +70,25 @@ BorrowedBook *remove_book_from_vector_borrowed(BorrowedBookVector *vector, size_
     return removed_book;
 }
 
-void free_book_vector_normal(BookVector *vector) {
+void free_book_vector_normal(BookVector* vector) {
     free(vector->data);
     vector->data = NULL;
     vector->size = 0;
     vector->capacity = 0;
 }
 
-void free_borrowed_book_vector(BorrowedBookVector *vector) {
+void free_borrowed_book_vector(BorrowedBookVector* vector) {
     free(vector->data);
     vector->data = NULL;
     vector->size = 0;
     vector->capacity = 0;
 }
 
-bool add_user_to_vector(const RegisteredUser *user) {
+bool add_user_to_vector(const RegisteredUser* user) {
     if (global_user_vector.size >= global_user_vector.capacity) {
         size_t new_capacity =
             global_user_vector.capacity == 0 ? 4 : global_user_vector.capacity * 2;
-        RegisteredUser *new_data =
+        RegisteredUser* new_data =
             realloc(global_user_vector.data, new_capacity * sizeof(RegisteredUser));
         if (!new_data) {
             return false;
@@ -99,11 +101,11 @@ bool add_user_to_vector(const RegisteredUser *user) {
     return true;
 }
 
-RegisteredUser *remove_user_from_vector(size_t index) {
+RegisteredUser* remove_user_from_vector(size_t index) {
     if (index >= global_user_vector.size) {
         return NULL;  // Index out of bounds
     }
-    RegisteredUser *removed_user = malloc(sizeof(RegisteredUser));
+    RegisteredUser* removed_user = malloc(sizeof(RegisteredUser));
     if (!removed_user) {
         return NULL;  // Memory allocation failed
     }
@@ -122,9 +124,9 @@ void free_user_vector() {
     global_user_vector.capacity = 0;
 }
 
-size_t read_argument(int fd, char **buffer_out) {
+size_t read_argument(int socket_fd, char** buffer_out) {
     size_t capacity = 16;
-    char *buffer = malloc(capacity);
+    char* buffer = malloc(capacity);
     if (!buffer) {
         perror("malloc");
         *buffer_out = NULL;
@@ -132,26 +134,26 @@ size_t read_argument(int fd, char **buffer_out) {
     }
 
     size_t size = 0;
-    char c;
+    char character;
     ssize_t bytesRead;
 
     while (1) {
-        bytesRead = read(fd, &c, 1);
+        bytesRead = read(socket_fd, &character, 1);
         if (bytesRead <= 0) {
             break;
         }
 
-        if (c == END_OF_ARGUMENT) {
+        if (character == END_OF_ARGUMENT) {
             break;
         }
-        if (c == END_OF_TRANSMISSION) {
-            lseek(fd, -1, SEEK_CUR);  // Move back to re-read EOT later
+        if (character == END_OF_TRANSMISSION) {
+            lseek(socket_fd, -1, SEEK_CUR);  // Move back to re-read EOT later
             break;
         }
 
         if (size + 1 >= capacity) {
             capacity *= 2;
-            char *new_buf = realloc(buffer, capacity);
+            char* new_buf = realloc(buffer, capacity);
             if (!new_buf) {
                 perror("realloc");
                 free(buffer);
@@ -160,7 +162,7 @@ size_t read_argument(int fd, char **buffer_out) {
             }
             buffer = new_buf;
         }
-        buffer[size++] = c;
+        buffer[size++] = character;
     }
 
     buffer[size] = '\0';
@@ -168,13 +170,15 @@ size_t read_argument(int fd, char **buffer_out) {
     return size;
 }
 
-OperationType read_operator(int fd) {
-    char *buffer = NULL;
-    if (read_argument(fd, &buffer) == 0) {  // No data read, return an error code
-        if (buffer) free(buffer);
+OperationType read_operator(int socket_fd) {
+    char* buffer = NULL;
+    if (read_argument(socket_fd, &buffer) == 0) {  // No data read, return an error code
+        if (buffer) {
+            free(buffer);
+        }
         return OP_ERROR;  // Indicate an error
     }
-    OperationType op_code = atoi(buffer);
+    OperationType op_code = strtol(buffer, NULL, 10);
     free(buffer);
     return op_code;
 }

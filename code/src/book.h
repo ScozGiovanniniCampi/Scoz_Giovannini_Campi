@@ -23,14 +23,14 @@ typedef struct BorrowedBook {
 } BorrowedBook;
 
 typedef struct {
-    Book *data;
+    Book* data;
     size_t size;
     size_t capacity;
     pthread_mutex_t mutex;  // Mutex for thread-safe access
 } BookVector;
 
 typedef struct {
-    BorrowedBook *data;
+    BorrowedBook* data;
     size_t size;
     size_t capacity;
     pthread_mutex_t mutex;  // Mutex for thread-safe access

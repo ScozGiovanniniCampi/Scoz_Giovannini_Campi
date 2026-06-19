@@ -50,37 +50,47 @@ void* pthread_run(void* arg) {
     switch (op_code) {
         case OP_ANSWER:
             // Handle OP_ANSWER
+            handle_answer(cfd, char_to_reqId(args[0]), char_to_resultCode(args[1]));
             break;
         case OP_REGISTER:
             if (counter >= 2) {
-                // Expecting requestId and username
-                requestId reqId = (requestId)strtoul(args[0], NULL, 10);
-                handle_register(cfd, reqId, args[1]);
+                handle_register(cfd, char_to_reqId(args[0]), args[1]);
             }
             break;
         case OP_SEARCH:
             // Handle OP_SEARCH
+            handle_search(cfd, char_to_reqId(args[0]), char_to_searchType(args[1]), args[2]);
             break;
         case OP_SEARCH_RESULT:
             // Handle OP_SEARCH_RESULT
+            handle_search_result(cfd, char_to_reqId(args[0]), atoi(args[1]),
+                                 (const char**)&args[2]);
             break;
         case OP_BORROW:
             // Handle OP_BORROW
+            handle_borrow(cfd, char_to_reqId(args[0]), char_to_senderType(args[1]), args[2],
+                          args[3]);
             break;
         case OP_RETURN:
             // Handle OP_RETURN
+            handle_return(cfd, char_to_reqId(args[0]), char_to_senderType(args[1]), args[2],
+                          args[3]);
             break;
         case OP_GET_USERS:
             // Handle OP_GET_USERS
+            handle_get_users(cfd, char_to_reqId(args[0]));
             break;
         case OP_USERS_RESULT:
             // Handle OP_USERS_RESULT
+            handle_users_result(cfd, char_to_reqId(args[0]), atoi(args[1]), (const char**)&args[2]);
             break;
         case OP_GET_BOOKS:
             // Handle OP_GET_BOOKS
+            handle_get_books(cfd, char_to_reqId(args[0]));
             break;
         case OP_BOOKS_RESULT:
             // Handle OP_BOOKS_RESULT
+            handle_books_result(cfd, char_to_reqId(args[0]), atoi(args[1]), (const char**)&args[2]);
             break;
         default:
             fprintf(stderr, "Unknown operation: %d\n", op_code);
@@ -127,8 +137,8 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL));  // Initialize random seed
 
-    unsigned int libraryId = atoi(argv[1]);
-    (void)argv[2];  // Unused for now
+    libraryId = atoi(argv[1]);
+    num_total_libraries = atoi(argv[2]);
 
     // Initialize global vectors
     global_book_vector = loadBooksFromFile(argv[3]);
