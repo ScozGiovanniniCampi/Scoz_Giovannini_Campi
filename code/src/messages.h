@@ -3,6 +3,7 @@
 
 typedef unsigned int requestId;
 
+
 typedef enum {
     OP_ANSWER,
     OP_REGISTER,

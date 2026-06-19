@@ -23,21 +23,19 @@ void handle_register(int fd, requestId reqId, const char* username) {
 
     if (global_user_vector) {
         pthread_mutex_lock(&global_user_vector->mutex);
-    }
 
-    bool success = add_user_to_vector(&user);
+        bool success = add_user_to_vector(&user);
 
-    if (!success) {
-        send_argument(fd, operationType_to_char(OP_ANSWER));
-        send_argument(fd, reqId_to_char(reqId));
-        send_argument(fd, resultCode_to_char(RESULT_FAILURE));
-    } else {
-        send_argument(fd, operationType_to_char(OP_ANSWER));
-        send_argument(fd, reqId_to_char(reqId));
-        send_argument(fd, resultCode_to_char(RESULT_SUCCESS));
-    }
+        if (!success) {
+            send_argument(fd, operationType_to_char(OP_ANSWER));
+            send_argument(fd, reqId_to_char(reqId));
+            send_argument(fd, resultCode_to_char(RESULT_FAILURE));
+        } else {
+            send_argument(fd, operationType_to_char(OP_ANSWER));
+            send_argument(fd, reqId_to_char(reqId));
+            send_argument(fd, resultCode_to_char(RESULT_SUCCESS));
+        }
 
-    if (global_user_vector) {
         pthread_mutex_unlock(&global_user_vector->mutex);
     }
 }
@@ -64,28 +62,25 @@ void handle_borrow(int fd, requestId reqId, SenderType sender_type, const char* 
 
     if (global_book_vector) {
         pthread_mutex_lock(&global_book_vector->mutex);
-    }
-
-    bool book_found = false;
-    for(size_t i = 0; i < global_book_vector->size; ++i) {
-        Book *book = &global_book_vector->data[i];
-        if (strcmp(book->title, book_title) == 0) {
-            if (book->status == AVAILABLE) {
-                book->status = BORROWED;
-                send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
-            } else {
-                send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+    
+        bool book_found = false;
+        for(size_t i = 0; i < global_book_vector->size; ++i) {
+            Book *book = &global_book_vector->data[i];
+            if (strcmp(book->title, book_title) == 0) {
+                if (book->status == AVAILABLE) {
+                    book->status = BORROWED;
+                    send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
+                } else {
+                    send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+                }
+                book_found = true;
+                break;
             }
-            book_found = true;
-            break;
         }
-    }
-    if (!book_found) {
-        send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
-    }
 
-    write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
-    if (global_book_vector) {
+        send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+        write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
+
         pthread_mutex_unlock(&global_book_vector->mutex);
     }
 }
@@ -98,29 +93,25 @@ void handle_return(int fd, requestId reqId, SenderType sender_type, const char* 
 
     if (global_book_vector) {
         pthread_mutex_lock(&global_book_vector->mutex);
-    }
 
-    bool book_found = false;
-    for(size_t i = 0; i < global_book_vector->size; ++i) {
-        Book *book = &global_book_vector->data[i];
-        if (strcmp(book->title, book_title) == 0) {
-            if (book->status == BORROWED) {
-                book->status = AVAILABLE;
-                send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
-            } else {
-                send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+        bool book_found = false;
+        for(size_t i = 0; i < global_book_vector->size; ++i) {
+            Book *book = &global_book_vector->data[i];
+            if (strcmp(book->title, book_title) == 0) {
+                if (book->status == BORROWED) {
+                    book->status = AVAILABLE;
+                    send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
+                } else {
+                    send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+                }
+                book_found = true;
+                break;
             }
-            book_found = true;
-            break;
         }
-    }
-    if (!book_found) {
+
         send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
-    }
+        write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
 
-    write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
-
-    if (global_book_vector) {
         pthread_mutex_unlock(&global_book_vector->mutex);
     }
 
@@ -136,16 +127,13 @@ void handle_get_users(int fd, requestId reqId) {
     if (global_user_vector) {
         pthread_mutex_lock(&global_user_vector->mutex);
         send_argument(fd, global_user_vector->size); // Result code
-    }
-    
 
-    for(size_t i = 0; i < global_user_vector->size; ++i) {
-        RegisteredUser *user = &global_user_vector->data[i];
-        send_argument(fd, user->name);
-    }
-    write(fd, END_OF_TRANSMISSION, 1); 
+        for(size_t i = 0; i < global_user_vector->size; ++i) {
+            RegisteredUser *user = &global_user_vector->data[i];
+            send_argument(fd, user->name);
+        }
+        write(fd, END_OF_TRANSMISSION, 1); 
     
-    if (global_user_vector) {
         pthread_mutex_unlock(&global_user_vector->mutex);
     }
 }
@@ -162,15 +150,13 @@ void handle_get_books(int fd, requestId reqId) {
 
     if (global_book_vector) {
         pthread_mutex_lock(&global_book_vector->mutex);
-    }
 
-    for(size_t i = 0; i < global_book_vector->size; ++i) {
-        Book *book = &global_book_vector->data[i];
-        send_argument(fd, book->title);
-    }
-    write(fd, END_OF_TRANSMISSION, 1); 
-    
-    if (global_book_vector) {
+        for(size_t i = 0; i < global_book_vector->size; ++i) {
+            Book *book = &global_book_vector->data[i];
+            send_argument(fd, book->title);
+        }
+        write(fd, END_OF_TRANSMISSION, 1); 
+        
         pthread_mutex_unlock(&global_book_vector->mutex);
     }
 }
