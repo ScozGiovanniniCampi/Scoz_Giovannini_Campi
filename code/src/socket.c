@@ -77,3 +77,25 @@ void socket_close(LibrarySocket *sock) {
     close(sock->fd);
     unlink(sock->addr.sun_path);
 }
+
+void send_argument(int fd, const char *arg) {
+    size_t arg_len = strlen(arg);
+    size_t total_len = arg_len + 1; // +1 for END_OF_ARGUMENT
+
+    char *message = (char *)malloc(total_len);
+    if (!message) {
+        perror("malloc");
+        return;
+    }
+
+    memcpy(message, arg, arg_len);
+    message[arg_len] = END_OF_ARGUMENT;
+
+    if (write(fd, message, total_len) != total_len) {
+        perror("send_argument");
+        free(message);
+        return;
+    }
+
+    free(message);
+}

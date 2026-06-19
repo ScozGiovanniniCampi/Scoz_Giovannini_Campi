@@ -3,6 +3,8 @@
 
 typedef unsigned int requestId;
 
+char* reqId_to_char(requestId reqId);
+
 enum OperationType {
     OP_ANSWER,
     OP_REGISTER,
@@ -30,13 +32,9 @@ enum SenderType {
 };
 
 // TODO: Add more error codes as needed
-enum RESULT_CODE {
+enum ResultCode {
     RESULT_SUCCESS,
-    ERROR_USER_REGISTERED,
     ERROR_USER_NOT_REGISTERED,
-    ERROR_BOOK_NOT_FOUND,
-    ERROR_BOOK_UNAVAILABLE,
-    ERROR_INVALID_OPERATION,
 };
 
 const char END_OF_ARGUMENT = 3; // ASCII ETX (End of Text) character

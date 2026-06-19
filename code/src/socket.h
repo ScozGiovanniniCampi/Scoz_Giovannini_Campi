@@ -3,6 +3,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include "messages.h"
 
 #define SOCKET_PATH_TEMPLATE "/tmp/lib_%d.sock"
 
@@ -17,4 +18,7 @@ typedef struct {
 int socket_init_server(LibrarySocket *sock, int library_id);
 int socket_connect_to_server(int peer_id);
 void socket_close(LibrarySocket *sock);
+
+void send_argument(int fd, const char *arg);
+
 #endif // LIB_SOCKET_H
