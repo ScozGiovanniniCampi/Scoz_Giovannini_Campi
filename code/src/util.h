@@ -8,6 +8,8 @@
 extern BookVector* global_book_vector;
 extern BorrowedBookVector* global_borrowed_book_vector;
 extern RegisteredUserVector* global_user_vector;
+extern unsigned int global_library_id;
+extern unsigned int global_num_total_libraries;
 
 void add_book_to_vector_normal(BookVector *vector, const Book *book);
 void add_book_to_vector_borrowed(BorrowedBookVector *vector, const BorrowedBook *borrowedBook);
