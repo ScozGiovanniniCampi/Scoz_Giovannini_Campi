@@ -57,11 +57,37 @@ void handle_search_result(int fd, requestId reqId, int book_count, const char** 
 }
 
 void handle_borrow(int fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
-    (void)fd;
-    (void)reqId;
-    (void)sender_type;
-    (void)sender_id;
-    (void)book_title;
+    printf("Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", reqId, sender_type, sender_id, book_title);
+
+    send_argument(fd, operationType_to_char(OP_ANSWER)); // Operation type
+    send_argument(fd, reqId_to_char(reqId)); // reqId
+
+    if (global_book_vector) {
+        pthread_mutex_lock(&global_book_vector->mutex);
+    }
+
+    bool book_found = false;
+    for(size_t i = 0; i < global_book_vector->size; ++i) {
+        Book *book = &global_book_vector->data[i];
+        if (strcmp(book->title, book_title) == 0) {
+            if (book->status == AVAILABLE) {
+                book->status = BORROWED;
+                send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
+            } else {
+                send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+            }
+            book_found = true;
+            break;
+        }
+    }
+    if (!book_found) {
+        send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+    }
+
+    write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
+    if (global_book_vector) {
+        pthread_mutex_unlock(&global_book_vector->mutex);
+    }
 }
 
 void handle_return(int fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
@@ -74,6 +100,7 @@ void handle_return(int fd, requestId reqId, SenderType sender_type, const char* 
         pthread_mutex_lock(&global_book_vector->mutex);
     }
 
+    bool book_found = false;
     for(size_t i = 0; i < global_book_vector->size; ++i) {
         Book *book = &global_book_vector->data[i];
         if (strcmp(book->title, book_title) == 0) {
@@ -83,9 +110,15 @@ void handle_return(int fd, requestId reqId, SenderType sender_type, const char* 
             } else {
                 send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
             }
+            book_found = true;
             break;
         }
     }
+    if (!book_found) {
+        send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+    }
+
+    write(fd, END_OF_TRANSMISSION, 1); // Signal end of transmission
 
     if (global_book_vector) {
         pthread_mutex_unlock(&global_book_vector->mutex);
