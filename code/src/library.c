@@ -137,8 +137,8 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL));  // Initialize random seed
 
-    libraryId = atoi(argv[1]);
-    num_total_libraries = atoi(argv[2]);
+    global_library_id = atoi(argv[1]);
+    global_num_total_libraries = atoi(argv[2]);
 
     // Initialize global vectors
     global_book_vector = loadBooksFromFile(argv[3]);
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_init(&global_user_vector.mutex, NULL);
 
     LibrarySocket sock;
-    if (socket_init_server(&sock, libraryId) < 0) {
+    if (socket_init_server(&sock, global_library_id) < 0) {
         fprintf(stderr, "Failed to initialize server socket\n");
         return 1;
     }

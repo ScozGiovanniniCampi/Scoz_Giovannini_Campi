@@ -55,34 +55,60 @@ void handle_search_result(int fd, requestId reqId, int book_count, const char** 
     (void)books;
 }
 
-void handle_borrow(int fd, requestId reqId, SenderType sender_type, const char* sender_id,
-                   const char* book_title) {
-    printf("Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n",
-           reqId, sender_type, sender_id, book_title);
+void handle_borrow(int fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
+    printf("Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", reqId, sender_type, sender_id, book_title);
 
-    send_argument(fd, operationType_to_char(OP_ANSWER));  // Operation type
-    send_argument(fd, reqId_to_char(reqId));              // reqId
 
-    pthread_mutex_lock(&global_book_vector.mutex);
+    if (sender_type == SENDER_USER) {
+        send_argument(fd, operationType_to_char(OP_ANSWER));  // Operation type
+        send_argument(fd, reqId_to_char(reqId));              // reqId
 
-    bool book_found = false;
-    for (size_t i = 0; i < global_book_vector.size; ++i) {
-        Book* book = &global_book_vector.data[i];
-        if (strcmp(book->title, book_title) == 0) {
-            if (book->status == AVAILABLE) {
-                book->status = BORROWED;
-                send_argument(fd, resultCode_to_char(RESULT_SUCCESS));  // Result code
-            } else {
-                send_argument(fd, resultCode_to_char(RESULT_FAILURE));  // Result code
+        pthread_mutex_lock(&global_book_vector.mutex);
+
+        bool book_found = false;
+        for (size_t i = 0; i < global_book_vector.size; ++i) {
+            Book* book = &global_book_vector.data[i];
+            if (strcmp(book->title, book_title) == 0) {
+                if (book->status == AVAILABLE) {
+                    book->status = BORROWED;
+                    send_argument(fd, resultCode_to_char(RESULT_SUCCESS));  // Result code
+                } else {
+                    send_argument(fd, resultCode_to_char(ERROR_BOOK_ALREADY_BORROWED));  // Result code
+                }
+                book_found = true;
+                break;
             }
-            book_found = true;
-            break;
+        }
+        if (!book_found) {
+            for (size_t i = 0; i < global_num_total_libraries; ++i) {
+                if (i + 1 == global_library_id) {
+                    continue;  // Skip the current library
+                }
+                int peer_fd = socket_connect_to_server(i + 1);
+                if (peer_fd < 0) {
+                    fprintf(stderr, "Failed to connect to library %zu\n", i + 1);
+                    continue;
+                }
+
+                send_argument(peer_fd, operationType_to_char(OP_BORROW));
+                send_argument(peer_fd, reqId_to_char(reqId));
+                send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+                send_argument(peer_fd, sender_id);
+                send_argument(peer_fd, book_title);
+
+                char eot_check;
+                if (read(peer_fd, &eot_check, 1) > 0 && eot_check != END_OF_TRANSMISSION) {
+                    lseek(peer_fd, -1, SEEK_CUR);
+                }
+
+                close(peer_fd);
+            }
         }
     }
-    if (!book_found) {
-        send_argument(fd, resultCode_to_char(RESULT_FAILURE));  // Result code
-    }
 
+
+
+    
     char eot = END_OF_TRANSMISSION;
     write(fd, &eot, 1);  // Signal end of transmission
     pthread_mutex_unlock(&global_book_vector.mutex);

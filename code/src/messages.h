@@ -36,6 +36,8 @@ typedef enum {
     RESULT_SUCCESS,
     RESULT_FAILURE,
     ERROR_USER_NOT_REGISTERED,
+    ERROR_BOOK_NOT_FOUND,
+    ERROR_BOOK_ALREADY_BORROWED,
 } ResultCode;
 
 char* reqId_to_char(requestId reqId);

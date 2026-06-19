@@ -9,8 +9,8 @@
 BookVector global_book_vector = {0};
 BorrowedBookVector global_borrowed_book_vector = {0};
 RegisteredUserVector global_user_vector = {0};
-unsigned int libraryId = 0;
-unsigned int num_total_libraries = 0;
+unsigned int global_library_id = 0;
+unsigned int global_num_total_libraries = 0;
 
 void add_book_to_vector_normal(BookVector* vector, const Book* book) {
     if (vector->size >= vector->capacity) {
