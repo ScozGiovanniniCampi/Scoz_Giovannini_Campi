@@ -1,6 +1,7 @@
 #include "book_loader.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 static void parse_field(char **p, char *dst, size_t dst_size) {
     char *s = *p;

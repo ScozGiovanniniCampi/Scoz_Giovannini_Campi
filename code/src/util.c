@@ -181,3 +181,6 @@ OperationType read_operator(int fd) {
     free(buffer);
     return op_code;
 }
+
+
+

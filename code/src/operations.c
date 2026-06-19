@@ -27,23 +27,14 @@ void handle_register(int fd, requestId reqId, const char* username) {
 
     bool success = add_user_to_vector(&user);
 
-    char op_str[12];
-    snprintf(op_str, sizeof(op_str), "%d", OP_ANSWER);
-
-    char res_fail_str[12];
-    snprintf(res_fail_str, sizeof(res_fail_str), "%d", RESULT_FAILURE);
-
-    char res_succ_str[12];
-    snprintf(res_succ_str, sizeof(res_succ_str), "%d", RESULT_SUCCESS);
-
     if (!success) {
-        send_argument(fd, op_str);
+        send_argument(fd, operationType_to_char(OP_ANSWER));
         send_argument(fd, reqId_to_char(reqId));
-        send_argument(fd, res_fail_str);
+        send_argument(fd, resultCode_to_char(RESULT_FAILURE));
     } else {
-        send_argument(fd, op_str);
+        send_argument(fd, operationType_to_char(OP_ANSWER));
         send_argument(fd, reqId_to_char(reqId));
-        send_argument(fd, res_succ_str);
+        send_argument(fd, resultCode_to_char(RESULT_SUCCESS));
     }
 
     if (global_user_vector) {
@@ -74,16 +65,56 @@ void handle_borrow(int fd, requestId reqId, SenderType sender_type, const char* 
 }
 
 void handle_return(int fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
-    (void)fd;
-    (void)reqId;
-    (void)sender_type;
-    (void)sender_id;
-    (void)book_title;
+    printf("Handling return request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", reqId, sender_type, sender_id, book_title);
+
+    send_argument(fd, operationType_to_char(OP_ANSWER)); // Operation type
+    send_argument(fd, reqId_to_char(reqId)); // reqId
+
+    if (global_book_vector) {
+        pthread_mutex_lock(&global_book_vector->mutex);
+    }
+
+    for(size_t i = 0; i < global_book_vector->size; ++i) {
+        Book *book = &global_book_vector->data[i];
+        if (strcmp(book->title, book_title) == 0) {
+            if (book->status == BORROWED) {
+                book->status = AVAILABLE;
+                send_argument(fd, resultCode_to_char(RESULT_SUCCESS)); // Result code
+            } else {
+                send_argument(fd, resultCode_to_char(RESULT_FAILURE)); // Result code
+            }
+            break;
+        }
+    }
+
+    if (global_book_vector) {
+        pthread_mutex_unlock(&global_book_vector->mutex);
+    }
+
 }
 
 void handle_get_users(int fd, requestId reqId) {
-    (void)fd;
-    (void)reqId;
+    printf("Handling get users request: reqId=%d\n", reqId);
+    
+    send_argument(fd, operationType_to_char(OP_USERS_RESULT)); // Operation type
+    send_argument(fd, reqId_to_char(reqId)); // reqId
+
+
+    if (global_user_vector) {
+        pthread_mutex_lock(&global_user_vector->mutex);
+        send_argument(fd, global_user_vector->size); // Result code
+    }
+    
+
+    for(size_t i = 0; i < global_user_vector->size; ++i) {
+        RegisteredUser *user = &global_user_vector->data[i];
+        send_argument(fd, user->name);
+    }
+    write(fd, END_OF_TRANSMISSION, 1); 
+    
+    if (global_user_vector) {
+        pthread_mutex_unlock(&global_user_vector->mutex);
+    }
 }
 
 void handle_users_result(int fd, requestId reqId, int user_count, const char** users) {
@@ -94,8 +125,21 @@ void handle_users_result(int fd, requestId reqId, int user_count, const char** u
 }
 
 void handle_get_books(int fd, requestId reqId) {
-    (void)fd;
-    (void)reqId;
+    printf("Handling get books request: reqId=%d\n", reqId);
+
+    if (global_book_vector) {
+        pthread_mutex_lock(&global_book_vector->mutex);
+    }
+
+    for(size_t i = 0; i < global_book_vector->size; ++i) {
+        Book *book = &global_book_vector->data[i];
+        send_argument(fd, book->title);
+    }
+    write(fd, END_OF_TRANSMISSION, 1); 
+    
+    if (global_book_vector) {
+        pthread_mutex_unlock(&global_book_vector->mutex);
+    }
 }
 
 void handle_books_result(int fd, requestId reqId, int book_count, const char** books) {
