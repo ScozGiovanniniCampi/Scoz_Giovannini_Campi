@@ -1,16 +1,13 @@
 #ifndef BOOK_H
 #define BOOK_H
-#include <stddef.h>
 #include <pthread.h>
+#include <stddef.h>
 
 #define MAX_TITLE_LENGTH 100
 #define MAX_AUTHOR_LENGTH 50
 #define MAX_BORROWER_LENGTH 50
 
-typedef enum {
-    AVAILABLE,
-    BORROWED
-} BookStatus;
+typedef enum { AVAILABLE, BORROWED } BookStatus;
 
 // TODO: switch to heap save memory and avoid fixed size arrays for title and author
 typedef struct Book {
@@ -29,14 +26,14 @@ typedef struct {
     Book *data;
     size_t size;
     size_t capacity;
-    pthread_mutex_t mutex; // Mutex for thread-safe access
+    pthread_mutex_t mutex;  // Mutex for thread-safe access
 } BookVector;
 
 typedef struct {
     BorrowedBook *data;
     size_t size;
     size_t capacity;
-    pthread_mutex_t mutex; // Mutex for thread-safe access
+    pthread_mutex_t mutex;  // Mutex for thread-safe access
 } BorrowedBookVector;
 
-#endif // BOOK_H
+#endif  // BOOK_H

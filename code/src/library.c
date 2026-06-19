@@ -1,17 +1,18 @@
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <stdint.h>
+
 #include "book.h"
-#include "socket.h"
-#include "util.h"
 #include "book_loader.h"
 #include "operations.h"
+#include "socket.h"
+#include "util.h"
 
-void* pthread_run (void* arg) {
+void* pthread_run(void* arg) {
     int cfd = (int)(intptr_t)arg;
     OperationType op_code = read_operator(cfd);
 
@@ -101,7 +102,7 @@ void* pthread_run (void* arg) {
     return NULL;
 }
 
-void loop(LibrarySocket *sock) {
+void loop(LibrarySocket* sock) {
     while (1) {
         int cfd = accept(sock->fd, NULL, NULL);
         if (cfd < 0) {
@@ -113,38 +114,31 @@ void loop(LibrarySocket *sock) {
             perror("pthread_create");
             close(cfd);
         } else {
-            pthread_detach(thread_id); // Detach the thread to clean up resources when it finishes
+            pthread_detach(thread_id);  // Detach the thread to clean up resources when it finishes
         }
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if (argc != 4) {
         printf("Usage: %s <library_id> <num_total_libraries> <catalog_file.csv>\n", argv[0]);
         return 1;
     }
 
-    srand(time(NULL)); // Initialize random seed
+    srand(time(NULL));  // Initialize random seed
 
     unsigned int libraryId = atoi(argv[1]);
-    (void)argv[2]; // Unused for now
+    (void)argv[2];  // Unused for now
 
     // Initialize global vectors
     global_book_vector = loadBooksFromFile(argv[3]);
-    if (!global_book_vector) {
+    if (global_book_vector.data == NULL) {
         fprintf(stderr, "Failed to load books from file: %s\n", argv[3]);
         return 1;
     }
 
-    global_borrowed_book_vector = calloc(1, sizeof(BorrowedBookVector));
-    if (global_borrowed_book_vector) {
-        pthread_mutex_init(&global_borrowed_book_vector->mutex, NULL);
-    }
-
-    global_user_vector = calloc(1, sizeof(RegisteredUserVector));
-    if (global_user_vector) {
-        pthread_mutex_init(&global_user_vector->mutex, NULL);
-    }
+    pthread_mutex_init(&global_borrowed_book_vector.mutex, NULL);
+    pthread_mutex_init(&global_user_vector.mutex, NULL);
 
     LibrarySocket sock;
     if (socket_init_server(&sock, libraryId) < 0) {
@@ -156,23 +150,9 @@ int main(int argc, char *argv[]) {
 
     socket_close(&sock);
 
-    if (global_book_vector) {
-        free_book_vector(global_book_vector);
-        free(global_book_vector);
-        global_book_vector = NULL;
-    }
-
-    if (global_borrowed_book_vector) {
-        free_borrowed_book_vector(global_borrowed_book_vector);
-        free(global_borrowed_book_vector);
-        global_borrowed_book_vector = NULL;
-    }
-
-    if (global_user_vector) {
-        free_user_vector();
-        free(global_user_vector);
-        global_user_vector = NULL;
-    }
+    free_book_vector(&global_book_vector);
+    free_book_vector(&global_borrowed_book_vector);
+    free_user_vector();
 
     return 0;
 }

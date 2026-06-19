@@ -1,10 +1,10 @@
 #include "socket.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 
 int socket_init_server(LibrarySocket *sock, int library_id) {
     sock->library_id = library_id;
@@ -24,7 +24,8 @@ int socket_init_server(LibrarySocket *sock, int library_id) {
         return -2;
     }
 
-    memset(sock->addr.sun_path + strlen(sock->addr.sun_path), 0, sizeof(sock->addr.sun_path) - strlen(sock->addr.sun_path));
+    memset(sock->addr.sun_path + strlen(sock->addr.sun_path), 0,
+           sizeof(sock->addr.sun_path) - strlen(sock->addr.sun_path));
 
     if (bind(sock->fd, (struct sockaddr *)&sock->addr, sizeof(sock->addr)) < 0) {
         perror("bind");
@@ -61,10 +62,10 @@ int socket_connect_to_server(int peer_id) {
     while (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         if (errno == ECONNREFUSED) {
             // Server not ready yet, wait and retry
-            sleep(1); // 1 second
+            sleep(1);  // 1 second
             continue;
         }
-        
+
         perror("connect");
         close(fd);
         return -3;
@@ -80,7 +81,7 @@ void socket_close(LibrarySocket *sock) {
 
 void send_argument(int fd, const char *arg) {
     size_t arg_len = strlen(arg);
-    size_t total_len = arg_len + 1; // +1 for END_OF_ARGUMENT
+    size_t total_len = arg_len + 1;  // +1 for END_OF_ARGUMENT
 
     char *message = (char *)malloc(total_len);
     if (!message) {

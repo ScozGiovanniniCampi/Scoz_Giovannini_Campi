@@ -3,6 +3,7 @@
 
 #include <sys/socket.h>
 #include <sys/un.h>
+
 #include "messages.h"
 
 #define SOCKET_PATH_TEMPLATE "/tmp/lib_%d.sock"
@@ -21,4 +22,4 @@ void socket_close(LibrarySocket *sock);
 
 void send_argument(int fd, const char *arg);
 
-#endif // LIB_SOCKET_H
+#endif  // LIB_SOCKET_H

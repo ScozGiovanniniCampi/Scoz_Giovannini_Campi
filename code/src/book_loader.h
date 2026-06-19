@@ -4,6 +4,6 @@
 #include "book.h"
 #include "util.h"
 
-BookVector *loadBooksFromFile(const char *filename);
+BookVector loadBooksFromFile(const char *filename);
 
 #endif /* BOOK_LOADER_H */

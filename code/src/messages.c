@@ -1,4 +1,5 @@
 #include "messages.h"
+
 #include <stdio.h>
 
 char* reqId_to_char(requestId reqId) {
@@ -13,19 +14,19 @@ char* resultCode_to_char(ResultCode result_code) {
     return buffer;
 }
 
-char *operationType_to_char(OperationType op_type) {
+char* operationType_to_char(OperationType op_type) {
     static __thread char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", op_type);
     return buffer;
 }
 
-char *searchType_to_char(SearchType search_type) {
+char* searchType_to_char(SearchType search_type) {
     static __thread char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", search_type);
     return buffer;
 }
 
-char *senderType_to_char(SenderType sender_type) {
+char* senderType_to_char(SenderType sender_type) {
     static __thread char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", sender_type);
     return buffer;
@@ -37,7 +38,6 @@ char* size_t_to_char(size_t value) {
     return buffer;
 }
 
-
 requestId char_to_reqId(const char* str) {
     static __thread requestId reqId;
     sscanf(str, "%u", &reqId);
@@ -45,26 +45,34 @@ requestId char_to_reqId(const char* str) {
 }
 
 ResultCode char_to_resultCode(const char* str) {
+    int val;
+    sscanf(str, "%d", &val);
     static __thread ResultCode result_code;
-    sscanf(str, "%d", &result_code);
+    result_code = (ResultCode)val;
     return result_code;
 }
 
 OperationType char_to_operationType(const char* str) {
+    int val;
+    sscanf(str, "%d", &val);
     static __thread OperationType op_type;
-    sscanf(str, "%d", &op_type);
+    op_type = (OperationType)val;
     return op_type;
 }
 
 SearchType char_to_searchType(const char* str) {
+    int val;
+    sscanf(str, "%d", &val);
     static __thread SearchType search_type;
-    sscanf(str, "%d", &search_type);
+    search_type = (SearchType)val;
     return search_type;
 }
 
 SenderType char_to_senderType(const char* str) {
+    int val;
+    sscanf(str, "%d", &val);
     static __thread SenderType sender_type;
-    sscanf(str, "%d", &sender_type);
+    sender_type = (SenderType)val;
     return sender_type;
 }
 
@@ -73,4 +81,3 @@ size_t char_to_size_t(const char* str) {
     sscanf(str, "%zu", &value);
     return value;
 }
-

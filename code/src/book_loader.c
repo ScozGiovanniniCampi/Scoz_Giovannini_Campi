@@ -1,4 +1,5 @@
 #include "book_loader.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -34,7 +35,8 @@ static void parse_field(char **p, char *dst, size_t dst_size) {
     *p = s;
 }
 
-static int parse_csv_line(char *line, char *title, size_t title_len, char *author, size_t author_len, int *year_out) {
+static int parse_csv_line(char *line, char *title, size_t title_len, char *author,
+                          size_t author_len, int *year_out) {
     char *p = line;
     while (*p == ' ' || *p == '\t') p++;
     parse_field(&p, title, title_len);
@@ -48,17 +50,14 @@ static int parse_csv_line(char *line, char *title, size_t title_len, char *autho
     return 1;
 }
 
-BookVector *loadBooksFromFile(const char *filename) {
-    BookVector *books = calloc(1, sizeof(*books));
-    if (!books) {
-        perror("calloc");
-        return NULL;
-    }
+BookVector loadBooksFromFile(const char *filename) {
+    BookVector books = {0};
+    pthread_mutex_init(&books.mutex, NULL);
+
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Could not open file");
-        free(books);
-        return NULL;
+        return books;
     }
 
     char *line = NULL;
@@ -66,11 +65,10 @@ BookVector *loadBooksFromFile(const char *filename) {
     ssize_t nread;
 
     /* skip header line (if present) */
-    if ((nread = getline(&line, &len, file)) == -1) {
+    if (getline(&line, &len, file) == -1) {
         free(line);
         fclose(file);
-        free(books);
-        return NULL;
+        return books;
     }
 
     while ((nread = getline(&line, &len, file)) != -1) {
@@ -80,11 +78,12 @@ BookVector *loadBooksFromFile(const char *filename) {
         if (*p == '\0') continue;
 
         Book b;
-        if (!parse_csv_line(line, b.title, MAX_TITLE_LENGTH, b.author, MAX_AUTHOR_LENGTH, &b.publicationYear)) {
+        if (!parse_csv_line(line, b.title, MAX_TITLE_LENGTH, b.author, MAX_AUTHOR_LENGTH,
+                            &b.publicationYear)) {
             continue;
         }
         b.status = AVAILABLE;
-        add_book_to_vector(books, &b);
+        add_book_to_vector(&books, &b);
     }
 
     free(line);
