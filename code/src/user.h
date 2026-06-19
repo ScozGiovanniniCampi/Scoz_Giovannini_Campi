@@ -2,6 +2,7 @@
 #define USER_H
 #include <stddef.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #define MAX_USER_LENGTH 50
 

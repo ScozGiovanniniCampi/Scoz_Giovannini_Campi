@@ -1,79 +1,87 @@
 #include "util.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
-void add_book_to_vector_normal(const Book *book) {
-    if (global_book_vector->size >= global_book_vector->capacity) {
-        size_t new_capacity = global_book_vector->capacity == 0 ? 4 : global_book_vector->capacity * 2;
-        Book *new_data = realloc(global_book_vector->data, new_capacity * sizeof(Book));
+// Definitions of the global vectors
+BookVector* global_book_vector = NULL;
+BorrowedBookVector* global_borrowed_book_vector = NULL;
+RegisteredUserVector* global_user_vector = NULL;
+
+void add_book_to_vector_normal(BookVector *vector, const Book *book) {
+    if (vector->size >= vector->capacity) {
+        size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
+        Book *new_data = realloc(vector->data, new_capacity * sizeof(Book));
         if (!new_data) {
             return;
         }
-        global_book_vector->data = new_data;
-        global_book_vector->capacity = new_capacity;
+        vector->data = new_data;
+        vector->capacity = new_capacity;
     }
-    global_book_vector->data[global_book_vector->size++] = *book;
+    vector->data[vector->size++] = *book;
 }
 
-void add_book_to_vector_borrowed(const BorrowedBook *borrowedBook) {
-    if (global_borrowed_book_vector->size >= global_borrowed_book_vector->capacity) {
-        size_t new_capacity = global_borrowed_book_vector->capacity == 0 ? 4 : global_borrowed_book_vector->capacity * 2;
-        BorrowedBook *new_data = realloc(global_borrowed_book_vector->data, new_capacity * sizeof(BorrowedBook));
+void add_book_to_vector_borrowed(BorrowedBookVector *vector, const BorrowedBook *borrowedBook) {
+    if (vector->size >= vector->capacity) {
+        size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
+        BorrowedBook *new_data = realloc(vector->data, new_capacity * sizeof(BorrowedBook));
         if (!new_data) {
             return;
         }
-        global_borrowed_book_vector->data = new_data;
-        global_borrowed_book_vector->capacity = new_capacity;
+        vector->data = new_data;
+        vector->capacity = new_capacity;
     }
-    global_borrowed_book_vector->data[global_borrowed_book_vector->size++] = *borrowedBook;
+    vector->data[vector->size++] = *borrowedBook;
 }
 
-Book* remove_book_from_vector_normal(size_t index) {
-    if (index >= global_book_vector->size) {
+Book* remove_book_from_vector_normal(BookVector *vector, size_t index) {
+    if (index >= vector->size) {
         return NULL; // Index out of bounds
     }
     Book *removed_book = malloc(sizeof(Book));
     if (!removed_book) {
         return NULL; // Memory allocation failed
     }
-    *removed_book = global_book_vector->data[index];
-    for (size_t i = index; i < global_book_vector->size - 1; ++i) {
-        global_book_vector->data[i] = global_book_vector->data[i + 1];
+    *removed_book = vector->data[index];
+    for (size_t i = index; i < vector->size - 1; ++i) {
+        vector->data[i] = vector->data[i + 1];
     }
-    global_book_vector->size--;
+    vector->size--;
     return removed_book;
 }
 
-BorrowedBook* remove_book_from_vector_borrowed(size_t index) {
-    if (index >= global_borrowed_book_vector->size) {
+BorrowedBook* remove_book_from_vector_borrowed(BorrowedBookVector *vector, size_t index) {
+    if (index >= vector->size) {
         return NULL; // Index out of bounds
     }
     BorrowedBook *removed_book = malloc(sizeof(BorrowedBook));
     if (!removed_book) {
         return NULL; // Memory allocation failed
     }
-    *removed_book = global_borrowed_book_vector->data[index];
-    for (size_t i = index; i < global_borrowed_book_vector->size - 1; ++i) {
-        global_borrowed_book_vector->data[i] = global_borrowed_book_vector->data[i + 1];
+    *removed_book = vector->data[index];
+    for (size_t i = index; i < vector->size - 1; ++i) {
+        vector->data[i] = vector->data[i + 1];
     }
-    global_borrowed_book_vector->size--;
+    vector->size--;
     return removed_book;
 }
 
-void free_book_vector_normal() {
-    if (global_book_vector) {
-        free(global_book_vector->data);
-        global_book_vector->data = NULL;
-        global_book_vector->size = 0;
-        global_book_vector->capacity = 0;
+void free_book_vector_normal(BookVector *vector) {
+    if (vector) {
+        free(vector->data);
+        vector->data = NULL;
+        vector->size = 0;
+        vector->capacity = 0;
     }
 }
 
-void free_borrowed_book_vector() {
-    if (global_borrowed_book_vector) {
-        free(global_borrowed_book_vector->data);
-        global_borrowed_book_vector->data = NULL;
-        global_borrowed_book_vector->size = 0;
-        global_borrowed_book_vector->capacity = 0;
+void free_borrowed_book_vector(BorrowedBookVector *vector) {
+    if (vector) {
+        free(vector->data);
+        vector->data = NULL;
+        vector->size = 0;
+        vector->capacity = 0;
     }
 }
 
@@ -117,40 +125,56 @@ void free_user_vector() {
     }
 }
 
-size_t read_argument(int fd, char *buffer) {
-    buffer = malloc(1); // Allocate memory for the buffer
-    char tmp_buffer[1]; // Temporary buffer for reading
-    ssize_t bytesRead = 0;
-    size_t totalBytesRead = 0;
+size_t read_argument(int fd, char **buffer_out) {
+    size_t capacity = 16;
+    char *buffer = malloc(capacity);
+    if (!buffer) {
+        perror("malloc");
+        *buffer_out = NULL;
+        return 0;
+    }
+
+    size_t size = 0;
+    char c;
+    ssize_t bytesRead;
+
     while (1) {
-        bytesRead = read(fd, tmp_buffer, 1); // Read one byte at a time
-        if (bytesRead < 0) {
+        bytesRead = read(fd, &c, 1);
+        if (bytesRead <= 0) {
             break;
         }
-        totalBytesRead += bytesRead;
-        if (totalBytesRead >= sizeof(buffer)) {
-            buffer = realloc(buffer, sizeof(buffer) * 2); // Resize buffer if needed
+
+        if (c == END_OF_ARGUMENT) {
+            break;
+        }
+        if (c == END_OF_TRANSMISSION) {
+            lseek(fd, -1, SEEK_CUR); // Move back to re-read EOT later
+            break;
         }
 
-        if (tmp_buffer[0] == END_OF_ARGUMENT) {
-            break; // End of argument
+        if (size + 1 >= capacity) {
+            capacity *= 2;
+            char *new_buf = realloc(buffer, capacity);
+            if (!new_buf) {
+                perror("realloc");
+                free(buffer);
+                *buffer_out = NULL;
+                return 0;
+            }
+            buffer = new_buf;
         }
-        if (tmp_buffer[0] == END_OF_TRANSMISSION) {
-            lseek(fd, -1, SEEK_CUR); // Move back the file descriptor to re-read the EOT character later
-            break; // End of transmission
-        }
-
-        memcpy(buffer + totalBytesRead, tmp_buffer, bytesRead);
-        totalBytesRead += bytesRead;
+        buffer[size++] = c;
     }
-    buffer = realloc(buffer, totalBytesRead + 1); // Resize buffer to fit the data
-    buffer[totalBytesRead] = '\0'; // Null-terminate the string
-    return totalBytesRead;
+
+    buffer[size] = '\0';
+    *buffer_out = buffer;
+    return size;
 }
 
 OperationType read_operator(int fd) {
     char* buffer = NULL;
-    if (read_argument(fd, buffer) == 0) { // No data read, return an error code
+    if (read_argument(fd, &buffer) == 0) { // No data read, return an error code
+        if (buffer) free(buffer);
         return OP_ERROR; // Indicate an error
     }
     OperationType op_code = atoi(buffer);

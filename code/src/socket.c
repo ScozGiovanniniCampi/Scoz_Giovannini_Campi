@@ -91,7 +91,8 @@ void send_argument(int fd, const char *arg) {
     memcpy(message, arg, arg_len);
     message[arg_len] = END_OF_ARGUMENT;
 
-    if (write(fd, message, total_len) != total_len) {
+    ssize_t written = write(fd, message, total_len);
+    if (written < 0 || (size_t)written != total_len) {
         perror("send_argument");
         free(message);
         return;

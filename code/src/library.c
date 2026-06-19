@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdint.h>
 #include "book.h"
 #include "socket.h"
 #include "util.h"
@@ -11,25 +12,37 @@
 #include "operations.h"
 
 void* pthread_run (void* arg) {
-    int cfd = (int)arg;
+    int cfd = (int)(intptr_t)arg;
     OperationType op_code = read_operator(cfd);
 
-    char** args;
-    size_t* sizes;
+    char** args = NULL;
+    size_t* sizes = NULL;
     int counter = 0;
 
-    char* tmp;
+    char* tmp = NULL;
     int tmp_size;
 
     while ((tmp_size = read_argument(cfd, &tmp)) > 0) {
         sizes = realloc(sizes, (++counter) * sizeof(size_t));
+        if (!sizes) {
+            perror("realloc sizes");
+            free(tmp);
+            break;
+        }
         sizes[counter - 1] = tmp_size;
         args = realloc(args, (counter) * sizeof(char*));
+        if (!args) {
+            perror("realloc args");
+            free(tmp);
+            break;
+        }
         args[counter - 1] = tmp;
     }
 
-    free(tmp);
-    counter--; // Decrement counter to exclude the last empty string
+    // Free tmp if read_argument allocated it but returned 0 or error
+    if (tmp_size <= 0) {
+        free(tmp);
+    }
 
     sleep(rand() % 5 + 1);
 
@@ -38,7 +51,11 @@ void* pthread_run (void* arg) {
             // Handle OP_ANSWER
             break;
         case OP_REGISTER:
-            // Handle OP_REGISTER
+            if (counter >= 2) {
+                // Expecting requestId and username
+                requestId reqId = (requestId)strtoul(args[0], NULL, 10);
+                handle_register(cfd, reqId, args[1]);
+            }
             break;
         case OP_SEARCH:
             // Handle OP_SEARCH
@@ -65,17 +82,23 @@ void* pthread_run (void* arg) {
             // Handle OP_BOOKS_RESULT
             break;
         default:
-            fprintf(stderr, "Unknown operation: %c\n", buffer[0]);
+            fprintf(stderr, "Unknown operation: %d\n", op_code);
             break;
     }
 
-    lseek(cfd, 1, SEEK_CUR); // Skip the END_OF_TRANSMISSION character for the next read
+    // Skip the END_OF_TRANSMISSION character for the next read
+    char eot_check;
+    if (read(cfd, &eot_check, 1) > 0 && eot_check != END_OF_TRANSMISSION) {
+        lseek(cfd, -1, SEEK_CUR);
+    }
+
     for (int i = 0; i < counter; i++) {
         free(args[i]);
     }
     free(args);
     free(sizes);
     close(cfd);
+    return NULL;
 }
 
 void loop(LibrarySocket *sock) {
@@ -86,7 +109,7 @@ void loop(LibrarySocket *sock) {
             continue;
         }
         pthread_t thread_id;
-        if (pthread_create(&thread_id, NULL, pthread_run, (void*)cfd) != 0) {
+        if (pthread_create(&thread_id, NULL, pthread_run, (void*)(intptr_t)cfd) != 0) {
             perror("pthread_create");
             close(cfd);
         } else {
@@ -104,8 +127,24 @@ int main(int argc, char *argv[]) {
     srand(time(NULL)); // Initialize random seed
 
     unsigned int libraryId = atoi(argv[1]);
-    unsigned int numTotalLibraries = atoi(argv[2]);
-    BookVector *books = loadBooksFromFile(argv[3]);
+    (void)argv[2]; // Unused for now
+
+    // Initialize global vectors
+    global_book_vector = loadBooksFromFile(argv[3]);
+    if (!global_book_vector) {
+        fprintf(stderr, "Failed to load books from file: %s\n", argv[3]);
+        return 1;
+    }
+
+    global_borrowed_book_vector = calloc(1, sizeof(BorrowedBookVector));
+    if (global_borrowed_book_vector) {
+        pthread_mutex_init(&global_borrowed_book_vector->mutex, NULL);
+    }
+
+    global_user_vector = calloc(1, sizeof(RegisteredUserVector));
+    if (global_user_vector) {
+        pthread_mutex_init(&global_user_vector->mutex, NULL);
+    }
 
     LibrarySocket sock;
     if (socket_init_server(&sock, libraryId) < 0) {
@@ -117,9 +156,22 @@ int main(int argc, char *argv[]) {
 
     socket_close(&sock);
 
-    if (books) {
-        free_book_vector(books);
-        free(books);
+    if (global_book_vector) {
+        free_book_vector(global_book_vector);
+        free(global_book_vector);
+        global_book_vector = NULL;
+    }
+
+    if (global_borrowed_book_vector) {
+        free_borrowed_book_vector(global_borrowed_book_vector);
+        free(global_borrowed_book_vector);
+        global_borrowed_book_vector = NULL;
+    }
+
+    if (global_user_vector) {
+        free_user_vector();
+        free(global_user_vector);
+        global_user_vector = NULL;
     }
 
     return 0;

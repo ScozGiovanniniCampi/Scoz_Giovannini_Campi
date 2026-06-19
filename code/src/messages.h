@@ -5,7 +5,7 @@ typedef unsigned int requestId;
 
 char* reqId_to_char(requestId reqId);
 
-enum OperationType {
+typedef enum {
     OP_ANSWER,
     OP_REGISTER,
     OP_SEARCH,
@@ -17,27 +17,28 @@ enum OperationType {
     OP_GET_BOOKS,
     OP_BOOKS_RESULT,
     OP_ERROR = -1
-};
+} OperationType;
 
-enum SearchType {
+typedef enum {
     SEARCH_BY_TITLE,
     SEARCH_BY_AUTHOR,
     SEARCH_BY_YEAR,
-};
+} SearchType;
 
-enum SenderType {
+typedef enum {
     SENDER_USER,
     SENDER_LIBRARY,
     SENDER_MANAGER,
-};
+} SenderType;
 
 // TODO: Add more error codes as needed
-enum ResultCode {
+typedef enum {
     RESULT_SUCCESS,
+    RESULT_FAILURE,
     ERROR_USER_NOT_REGISTERED,
-};
+} ResultCode;
 
-const char END_OF_ARGUMENT = 3; // ASCII ETX (End of Text) character
-const char END_OF_TRANSMISSION = 4; // ASCII EOT (End of Transmission) character
+#define END_OF_ARGUMENT 3 // ASCII ETX (End of Text) character
+#define END_OF_TRANSMISSION 4 // ASCII EOT (End of Transmission) character
 
 #endif // MESSAGES_H
