@@ -12,7 +12,7 @@ typedef struct RegisteredUser {
 } RegisteredUser;
 
 typedef struct {
-    RegisteredUser *data;
+    RegisteredUser* data;
     size_t size;
     size_t capacity;
     pthread_mutex_t mutex;  // Mutex for thread-safe access

@@ -12,8 +12,7 @@
 #include "socket.h"
 #include "util.h"
 
-void* pthread_run(void* arg) {
-    int cfd = (int)(intptr_t)arg;
+OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
     OperationType op_code = read_operator(cfd);
 
     char** args = NULL;
@@ -21,80 +20,131 @@ void* pthread_run(void* arg) {
     int counter = 0;
 
     char* tmp = NULL;
-    int tmp_size;
+    size_t tmp_size;
 
-    while ((tmp_size = read_argument(cfd, &tmp)) > 0) {
-        sizes = realloc(sizes, (++counter) * sizeof(size_t));
-        if (!sizes) {
+    while (1) {
+        tmp_size = read_argument(cfd, &tmp);
+        if (tmp_size == 0) {
+            free(tmp);
+            break;
+        }
+
+        size_t* new_sizes = (size_t*)realloc(sizes, (counter + 1) * sizeof(size_t));
+        if (!new_sizes) {
             perror("realloc sizes");
             free(tmp);
             break;
         }
-        sizes[counter - 1] = tmp_size;
-        args = realloc(args, (counter) * sizeof(char*));
-        if (!args) {
+        sizes = new_sizes;
+        sizes[counter] = tmp_size;
+
+        char** new_args = (char**)realloc((void*)args, (counter + 1) * sizeof(char*));
+        if (!new_args) {
             perror("realloc args");
             free(tmp);
             break;
         }
-        args[counter - 1] = tmp;
+        args = new_args;
+        args[counter] = tmp;
+        counter++;
     }
 
-    // Free tmp if read_argument allocated it but returned 0 or error
-    if (tmp_size <= 0) {
-        free(tmp);
-    }
+    *args_out = args;
+    *sizes_out = sizes;
+    *counter_out = counter;
+    return op_code;
+}
 
-    sleep(rand() % 5 + 1);
-
+static int is_counter_valid(OperationType op_code, int counter, char** args) {
     switch (op_code) {
         case OP_ANSWER:
-            // Handle OP_ANSWER
-            handle_answer(cfd, char_to_reqId(args[0]), char_to_resultCode(args[1]));
+        case OP_REGISTER:
+            return counter == 2;
+        case OP_SEARCH:
+            return counter == 3;
+        case OP_BORROW:
+        case OP_RETURN:
+            return counter == 4;
+        case OP_GET_USERS:
+        case OP_GET_BOOKS:
+            return counter == 1;
+        case OP_SEARCH_RESULT:
+        case OP_USERS_RESULT:
+        case OP_BOOKS_RESULT: {
+            if (counter < 2) {
+                return 0;
+            }
+            int count = (int)strtol(args[1], NULL, 10);
+            return counter == 2 + count;
+        }
+        default:
+            return 1;
+    }
+}
+
+static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, char** args) {
+    switch (op_code) {
+        case OP_ANSWER:
+            handle_answer(cfd, reqId, char_to_resultCode(args[1]));
             break;
         case OP_REGISTER:
-            if (counter >= 2) {
-                handle_register(cfd, char_to_reqId(args[0]), args[1]);
-            }
+            handle_register(cfd, reqId, args[1]);
             break;
         case OP_SEARCH:
-            // Handle OP_SEARCH
-            handle_search(cfd, char_to_reqId(args[0]), char_to_searchType(args[1]), args[2]);
+            handle_search(cfd, reqId, char_to_searchType(args[1]), args[2]);
             break;
-        case OP_SEARCH_RESULT:
-            // Handle OP_SEARCH_RESULT
-            handle_search_result(cfd, char_to_reqId(args[0]), atoi(args[1]),
-                                 (const char**)&args[2]);
+        case OP_SEARCH_RESULT: {
+            int count = (int)strtol(args[1], NULL, 10);
+            handle_search_result(cfd, reqId, count, (const char**)&args[2]);
             break;
+        }
         case OP_BORROW:
-            // Handle OP_BORROW
-            handle_borrow(cfd, char_to_reqId(args[0]), char_to_senderType(args[1]), args[2],
-                          args[3]);
+            handle_borrow(cfd, reqId, char_to_senderType(args[1]), args[2], args[3]);
             break;
         case OP_RETURN:
-            // Handle OP_RETURN
-            handle_return(cfd, char_to_reqId(args[0]), char_to_senderType(args[1]), args[2],
-                          args[3]);
+            handle_return(cfd, reqId, char_to_senderType(args[1]), args[2], args[3]);
             break;
         case OP_GET_USERS:
-            // Handle OP_GET_USERS
-            handle_get_users(cfd, char_to_reqId(args[0]));
+            handle_get_users(cfd, reqId);
             break;
-        case OP_USERS_RESULT:
-            // Handle OP_USERS_RESULT
-            handle_users_result(cfd, char_to_reqId(args[0]), atoi(args[1]), (const char**)&args[2]);
+        case OP_USERS_RESULT: {
+            int count = (int)strtol(args[1], NULL, 10);
+            handle_users_result(cfd, reqId, count, (const char**)&args[2]);
             break;
+        }
         case OP_GET_BOOKS:
-            // Handle OP_GET_BOOKS
-            handle_get_books(cfd, char_to_reqId(args[0]));
+            handle_get_books(cfd, reqId);
             break;
-        case OP_BOOKS_RESULT:
-            // Handle OP_BOOKS_RESULT
-            handle_books_result(cfd, char_to_reqId(args[0]), atoi(args[1]), (const char**)&args[2]);
+        case OP_BOOKS_RESULT: {
+            int count = (int)strtol(args[1], NULL, 10);
+            handle_books_result(cfd, reqId, count, (const char**)&args[2]);
             break;
+        }
         default:
             fprintf(stderr, "Unknown operation: %d\n", op_code);
             break;
+    }
+}
+
+void* pthread_run(void* arg) {
+    int cfd = (int)(intptr_t)arg;
+
+    char** args = NULL;
+    size_t* sizes = NULL;
+    int counter = 0;
+    OperationType op_code = fetch_arguments(cfd, &args, &sizes, &counter);
+    if (args == NULL || counter < 1) {
+        free((void*)args);
+        free(sizes);
+        close(cfd);
+        return NULL;
+    }
+    requestId reqId = char_to_reqId(args[0]);
+
+    sleep((rand() % 5) + 1);
+
+    if (is_counter_valid(op_code, counter, args)) {
+        dispatch_operation(cfd, reqId, op_code, args);
     }
 
     // Skip the END_OF_TRANSMISSION character for the next read
@@ -106,7 +156,7 @@ void* pthread_run(void* arg) {
     for (int i = 0; i < counter; i++) {
         free(args[i]);
     }
-    free(args);
+    free((void*)args);
     free(sizes);
     close(cfd);
     return NULL;
@@ -137,8 +187,8 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL));  // Initialize random seed
 
-    global_library_id = atoi(argv[1]);
-    global_num_total_libraries = atoi(argv[2]);
+    global_library_id = (int)strtol(argv[1], NULL, 10);
+    global_num_total_libraries = (int)strtol(argv[2], NULL, 10);
 
     // Initialize global vectors
     global_book_vector = loadBooksFromFile(argv[3]);
@@ -151,7 +201,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_init(&global_user_vector.mutex, NULL);
 
     LibrarySocket sock;
-    if (socket_init_server(&sock, global_library_id) < 0) {
+    if (socket_init_server(&sock, (int)global_library_id) < 0) {
         fprintf(stderr, "Failed to initialize server socket\n");
         return 1;
     }

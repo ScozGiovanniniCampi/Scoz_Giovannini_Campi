@@ -16,10 +16,10 @@ typedef struct {
 } LibrarySocket;
 
 // Function signatures to implement
-int socket_init_server(LibrarySocket *sock, int library_id);
+int socket_init_server(LibrarySocket* sock, int library_id);
 int socket_connect_to_server(int peer_id);
-void socket_close(LibrarySocket *sock);
+void socket_close(LibrarySocket* sock);
 
-void send_argument(int fd, const char *arg);
+void send_argument(int socket_fd, const char* arg);
 
 #endif  // LIB_SOCKET_H

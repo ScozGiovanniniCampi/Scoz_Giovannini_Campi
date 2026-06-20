@@ -1,0 +1,4 @@
+# Enable standard lints for C projects
+Checks: 'clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-alpha*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-random-generator-seed,readability-*,-readability-magic-numbers'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'

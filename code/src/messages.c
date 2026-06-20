@@ -1,6 +1,9 @@
 #include "messages.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+
+#include "util.h"
 
 char* reqId_to_char(requestId reqId) {
     static __thread char buffer[32];
@@ -40,37 +43,33 @@ char* size_t_to_char(size_t value) {
 
 requestId char_to_reqId(const char* str) {
     static __thread requestId reqId;
-    sscanf(str, "%u", &reqId);
+    reqId = (requestId)strtoul(str, NULL, 10);
     return reqId;
 }
 
 ResultCode char_to_resultCode(const char* str) {
-    int val;
-    sscanf(str, "%d", &val);
+    int val = (int)strtol(str, NULL, 10);
     static __thread ResultCode result_code;
     result_code = (ResultCode)val;
     return result_code;
 }
 
 OperationType char_to_operationType(const char* str) {
-    int val;
-    sscanf(str, "%d", &val);
+    int val = (int)strtol(str, NULL, 10);
     static __thread OperationType op_type;
     op_type = (OperationType)val;
     return op_type;
 }
 
 SearchType char_to_searchType(const char* str) {
-    int val;
-    sscanf(str, "%d", &val);
+    int val = (int)strtol(str, NULL, 10);
     static __thread SearchType search_type;
     search_type = (SearchType)val;
     return search_type;
 }
 
 SenderType char_to_senderType(const char* str) {
-    int val;
-    sscanf(str, "%d", &val);
+    int val = (int)strtol(str, NULL, 10);
     static __thread SenderType sender_type;
     sender_type = (SenderType)val;
     return sender_type;
@@ -78,6 +77,6 @@ SenderType char_to_senderType(const char* str) {
 
 size_t char_to_size_t(const char* str) {
     static __thread size_t value;
-    sscanf(str, "%zu", &value);
+    value = (size_t)strtoul(str, NULL, 10);
     return value;
 }

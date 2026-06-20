@@ -16,6 +16,7 @@ TARGET = $(BUILD_DIR)/library
 
 # Collect all C source files from the source directory.
 SRCS = $(wildcard $(SRC_DIR)/*.c)
+HDRS = $(wildcard $(SRC_DIR)/*.h)
 
 # Derive object file names from source file names, placing them in OBJ_DIR.
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
@@ -25,7 +26,7 @@ BOOKS_FILE ?= code/books.csv
 LIBRARY_ID ?= 0
 
 # Declare phony targets so make does not confuse them with actual files.
-.PHONY: build run clean
+.PHONY: build run clean format lint
 
 # Build target depends on the final executable.
 build: $(TARGET)
@@ -46,7 +47,16 @@ run: build
 	@echo "Running $(TARGET) with ID=$(LIBRARY_ID) and books=$(BOOKS_FILE)"
 	$(TARGET) $(LIBRARY_ID) 1 $(BOOKS_FILE)
 
+# Format source and header files.
+format:
+	clang-format -i $(SRCS) $(HDRS)
+
+# Lint source files using clang-tidy.
+lint:
+	clang-tidy $(SRCS) -- -I$(SRC_DIR) $(CFLAGS)
+
 # Remove compiled artifacts and the executable.
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f /tmp/lib_*.sock
+

@@ -86,10 +86,8 @@ void free_borrowed_book_vector(BorrowedBookVector* vector) {
 
 bool add_user_to_vector(const RegisteredUser* user) {
     if (global_user_vector.size >= global_user_vector.capacity) {
-        size_t new_capacity =
-            global_user_vector.capacity == 0 ? 4 : global_user_vector.capacity * 2;
-        RegisteredUser* new_data =
-            realloc(global_user_vector.data, new_capacity * sizeof(RegisteredUser));
+        size_t new_capacity = global_user_vector.capacity == 0 ? 4 : global_user_vector.capacity * 2;
+        RegisteredUser* new_data = realloc(global_user_vector.data, new_capacity * sizeof(RegisteredUser));
         if (!new_data) {
             return false;
         }

@@ -6,16 +6,16 @@
 typedef unsigned int requestId;
 
 typedef enum {
-    OP_ANSWER,
-    OP_REGISTER,
-    OP_SEARCH,
-    OP_SEARCH_RESULT,
-    OP_BORROW,
-    OP_RETURN,
-    OP_GET_USERS,
-    OP_USERS_RESULT,
-    OP_GET_BOOKS,
-    OP_BOOKS_RESULT,
+    OP_ANSWER = 0,
+    OP_REGISTER = 1,
+    OP_SEARCH = 2,
+    OP_SEARCH_RESULT = 3,
+    OP_BORROW = 4,
+    OP_RETURN = 5,
+    OP_GET_USERS = 6,
+    OP_USERS_RESULT = 7,
+    OP_GET_BOOKS = 8,
+    OP_BOOKS_RESULT = 9,
     OP_ERROR = -1
 } OperationType;
 
