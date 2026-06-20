@@ -7,6 +7,10 @@ BookVector global_book_vector = {0};
 BorrowedBookVector global_borrowed_book_vector = {0};
 RegisteredUserVector global_user_vector = {0};
 
+// ==========================================
+// BookVector operations
+// ==========================================
+
 void add_book_to_vector_normal(BookVector* vector, const Book* book) {
     if (vector->size >= vector->capacity) {
         size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
@@ -18,19 +22,6 @@ void add_book_to_vector_normal(BookVector* vector, const Book* book) {
         vector->capacity = new_capacity;
     }
     vector->data[vector->size++] = *book;
-}
-
-void add_book_to_vector_borrowed(BorrowedBookVector* vector, const BorrowedBook* borrowedBook) {
-    if (vector->size >= vector->capacity) {
-        size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
-        BorrowedBook* new_data = realloc(vector->data, new_capacity * sizeof(BorrowedBook));
-        if (!new_data) {
-            return;
-        }
-        vector->data = new_data;
-        vector->capacity = new_capacity;
-    }
-    vector->data[vector->size++] = *borrowedBook;
 }
 
 Book* remove_book_from_vector_normal(BookVector* vector, size_t index) {
@@ -49,6 +40,30 @@ Book* remove_book_from_vector_normal(BookVector* vector, size_t index) {
     return removed_book;
 }
 
+void free_book_vector_normal(BookVector* vector) {
+    free(vector->data);
+    vector->data = NULL;
+    vector->size = 0;
+    vector->capacity = 0;
+}
+
+// ==========================================
+// BorrowedBookVector operations
+// ==========================================
+
+void add_book_to_vector_borrowed(BorrowedBookVector* vector, const BorrowedBook* borrowedBook) {
+    if (vector->size >= vector->capacity) {
+        size_t new_capacity = vector->capacity == 0 ? 4 : vector->capacity * 2;
+        BorrowedBook* new_data = realloc(vector->data, new_capacity * sizeof(BorrowedBook));
+        if (!new_data) {
+            return;
+        }
+        vector->data = new_data;
+        vector->capacity = new_capacity;
+    }
+    vector->data[vector->size++] = *borrowedBook;
+}
+
 BorrowedBook* remove_book_from_vector_borrowed(BorrowedBookVector* vector, size_t index) {
     if (index >= vector->size) {
         return NULL;  // Index out of bounds
@@ -65,19 +80,16 @@ BorrowedBook* remove_book_from_vector_borrowed(BorrowedBookVector* vector, size_
     return removed_book;
 }
 
-void free_book_vector_normal(BookVector* vector) {
-    free(vector->data);
-    vector->data = NULL;
-    vector->size = 0;
-    vector->capacity = 0;
-}
-
 void free_borrowed_book_vector(BorrowedBookVector* vector) {
     free(vector->data);
     vector->data = NULL;
     vector->size = 0;
     vector->capacity = 0;
 }
+
+// ==========================================
+// RegisteredUserVector operations
+// ==========================================
 
 bool add_user_to_vector(const RegisteredUser* user) {
     if (global_user_vector.size >= global_user_vector.capacity) {
