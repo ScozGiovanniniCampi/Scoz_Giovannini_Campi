@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // loop(&sock);
+    loop(&sock);
 
     socket_close(&sock);
 
