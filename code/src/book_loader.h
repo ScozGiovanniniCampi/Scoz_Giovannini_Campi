@@ -3,6 +3,7 @@
 
 #include "book.h"
 #include "util.h"
+#include "vector.h"
 
 BookVector loadBooksFromFile(const char* filename);
 

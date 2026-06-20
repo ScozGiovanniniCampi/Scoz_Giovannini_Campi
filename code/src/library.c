@@ -11,6 +11,7 @@
 #include "operations.h"
 #include "socket.h"
 #include "util.h"
+#include "vector.h"
 
 OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
     OperationType op_code = read_operator(cfd);

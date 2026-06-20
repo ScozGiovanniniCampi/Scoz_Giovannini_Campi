@@ -8,6 +8,7 @@
 #include "messages.h"
 #include "socket.h"
 #include "util.h"
+#include "vector.h"
 
 void handle_answer(int socket_fd, requestId reqId, ResultCode result_code) {
     (void)socket_fd;
