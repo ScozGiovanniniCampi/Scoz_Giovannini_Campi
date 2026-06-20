@@ -59,4 +59,5 @@ lint:
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f /tmp/lib_*.sock
+	rm -rf /tmp/lib_user_state
 
