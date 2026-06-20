@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "util.h"
+#include "utils/util.h"
 
 int socket_init_server(LibrarySocket* sock, int library_id) {
     sock->library_id = library_id;

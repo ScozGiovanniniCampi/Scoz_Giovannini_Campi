@@ -1,9 +1,9 @@
 #ifndef BOOK_LOADER_H
 #define BOOK_LOADER_H
 
-#include "book.h"
-#include "util.h"
-#include "vector.h"
+#include "models/book.h"
+#include "models/vector.h"
+#include "utils/util.h"
 
 BookVector loadBooksFromFile(const char* filename);
 

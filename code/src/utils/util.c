@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "messages.h"
+#include "network/messages.h"
 
 unsigned int global_library_id = 0;
 unsigned int global_num_total_libraries = 0;

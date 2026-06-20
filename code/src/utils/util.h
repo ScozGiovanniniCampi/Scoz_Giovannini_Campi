@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include "messages.h"
+#include "network/messages.h"
 
 extern unsigned int global_library_id;
 extern unsigned int global_num_total_libraries;

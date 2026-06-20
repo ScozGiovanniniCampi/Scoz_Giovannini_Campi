@@ -1,7 +1,7 @@
 #ifndef OPERATIONS_H
 #define OPERATIONS_H
 
-#include "messages.h"
+#include "network/messages.h"
 
 void handle_answer(int socket_fd, requestId reqId, ResultCode result_code);
 void handle_register(int socket_fd, requestId reqId, const char* username);

@@ -6,12 +6,12 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "book.h"
-#include "book_loader.h"
-#include "operations.h"
-#include "socket.h"
-#include "util.h"
-#include "vector.h"
+#include "models/book.h"
+#include "models/vector.h"
+#include "network/socket.h"
+#include "operations/operations.h"
+#include "utils/book_loader.h"
+#include "utils/util.h"
 
 OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
     OperationType op_code = read_operator(cfd);

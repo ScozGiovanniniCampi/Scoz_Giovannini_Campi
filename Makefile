@@ -14,9 +14,9 @@ BUILD_DIR = build
 OBJ_DIR = $(BUILD_DIR)/obj
 TARGET = $(BUILD_DIR)/library
 
-# Collect all C source files from the source directory.
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-HDRS = $(wildcard $(SRC_DIR)/*.h)
+# Collect all C source files recursively from the source directory.
+SRCS = $(shell find $(SRC_DIR) -name "*.c")
+HDRS = $(shell find $(SRC_DIR) -name "*.h")
 
 # Derive object file names from source file names, placing them in OBJ_DIR.
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
@@ -39,7 +39,7 @@ $(TARGET): $(OBJS)
 # Compile each source file into an object file.
 # The directory is created on demand before compiling.
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
 # Run the built program with the configured library ID and books file.
