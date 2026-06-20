@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 LIB_NUMBER=$1
 FILE="$2"

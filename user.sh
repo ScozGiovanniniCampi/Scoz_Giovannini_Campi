@@ -25,10 +25,21 @@ fi
 ETX=$'\x03' # End of Text (Argument delimiter)
 EOT=$'\x04' # End of Transmission
 
-# Generate/increment a persistent counter per username
+# Helper function to construct the payload by joining arguments with ETX and appending EOT
+build_payload() {
+    local IFS="$ETX"
+    PAYLOAD="$*${ETX}${EOT}"
+}
+
+# Generate/increment a persistent counter per username safely using flock
 STATE_DIR="/tmp/lib_user_state"
 mkdir -p "$STATE_DIR"
 COUNTER_FILE="${STATE_DIR}/${USERNAME}_counter.txt"
+LOCK_FILE="${STATE_DIR}/${USERNAME}_counter.lock"
+
+# Open the lock file and acquire an exclusive lock (blocks until available)
+exec 9>"$LOCK_FILE"
+flock -x 9
 
 if [ -f "$COUNTER_FILE" ]; then
     REQ_ID=$(cat "$COUNTER_FILE")
@@ -42,11 +53,15 @@ else
 fi
 echo "$REQ_ID" > "$COUNTER_FILE"
 
+# Release the lock and close file descriptor 9
+flock -u 9
+exec 9>&-
+
 # Build payload based on operation
 case "$OPERATION" in
     register)
         # Payload: OP_REGISTER (1) | REQ_ID | USERNAME
-        PAYLOAD="1${ETX}${REQ_ID}${ETX}${USERNAME}${ETX}${EOT}"
+        build_payload 1 "$REQ_ID" "$USERNAME"
         ;;
     borrow)
         if [ "$#" -lt 4 ]; then
@@ -55,7 +70,7 @@ case "$OPERATION" in
         fi
         BOOK_TITLE="$4"
         # Payload: OP_BORROW (4) | REQ_ID | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        PAYLOAD="4${ETX}${REQ_ID}${ETX}0${ETX}${USERNAME}${ETX}${BOOK_TITLE}${ETX}${EOT}"
+        build_payload 4 "$REQ_ID" 0 "$USERNAME" "$BOOK_TITLE"
         ;;
     return)
         if [ "$#" -lt 4 ]; then
@@ -64,7 +79,7 @@ case "$OPERATION" in
         fi
         BOOK_TITLE="$4"
         # Payload: OP_RETURN (5) | REQ_ID | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        PAYLOAD="5${ETX}${REQ_ID}${ETX}0${ETX}${USERNAME}${ETX}${BOOK_TITLE}${ETX}${EOT}"
+        build_payload 5 "$REQ_ID" 0 "$USERNAME" "$BOOK_TITLE"
         ;;
     search)
         if [ "$#" -lt 6 ] || [ "$4" != "--by" ]; then
@@ -83,7 +98,7 @@ case "$OPERATION" in
                 ;;
         esac
         # Payload: OP_SEARCH (2) | REQ_ID | SEARCH_TYPE | SEARCH_TERM
-        PAYLOAD="2${ETX}${REQ_ID}${ETX}${SEARCH_TYPE}${ETX}${SEARCH_TERM}${ETX}${EOT}"
+        build_payload 2 "$REQ_ID" "$SEARCH_TYPE" "$SEARCH_TERM"
         ;;
     *)
         echo "Error: Unknown operation '$OPERATION'. Must be register, borrow, return, or search." >&2
