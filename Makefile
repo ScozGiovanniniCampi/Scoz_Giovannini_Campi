@@ -23,7 +23,9 @@ OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 # Default runtime arguments, overridable from the command line.
 BOOKS_FILE ?= code/books.csv
+NUM_LIBRARIES ?= 3
 LIBRARY_ID ?= 0
+TARGET_DIR ?= build
 
 # Declare phony targets so make does not confuse them with actual files.
 .PHONY: build run clean format lint
@@ -42,10 +44,15 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
-# Run the built program with the configured library ID and books file.
+# Run the built program with the configured library ID, bootstrapping catalogs first.
 run: build
-	@echo "Running $(TARGET) with ID=$(LIBRARY_ID) and books=$(BOOKS_FILE)"
-	$(TARGET) $(LIBRARY_ID) 1 $(BOOKS_FILE)
+	@echo "Bootstrapping $(NUM_LIBRARIES) libraries from $(BOOKS_FILE) into $(TARGET_DIR)"
+	TARGET_DIR=$(TARGET_DIR) ./bootstrap.sh $(NUM_LIBRARIES) $(BOOKS_FILE)
+	@for id in $$(seq 0 $$(($$(echo $(NUM_LIBRARIES)) - 1))); do \
+		echo "Starting library $$id in the background with catalog=$(TARGET_DIR)/catalog$$(printf "%02d" $$id).csv"; \
+		$(TARGET) $$id $(NUM_LIBRARIES) $(TARGET_DIR)/catalog$$(printf "%02d" $$id).csv & \
+	done; \
+	wait
 
 # Format source and header files.
 format:
