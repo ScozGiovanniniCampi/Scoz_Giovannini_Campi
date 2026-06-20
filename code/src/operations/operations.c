@@ -58,7 +58,45 @@ void handle_search_result(int socket_fd, requestId reqId, int book_count, const 
     (void)books;
 }
 
-static void borrow_from_remote_libraries(requestId reqId, const char* sender_id, const char* book_title) {
+
+static ResultCode get_borrow_response(int peer_fd, requestId reqId, int library_id, const char* book_title) {
+    char** peer_args = NULL;
+    size_t* peer_sizes = NULL;
+    int counter = 0;
+    OperationType peer_op_code = fetch_arguments(peer_fd, &peer_args, &peer_sizes, &counter);
+    ResultCode res_code = ERROR_BOOK_NOT_FOUND;
+
+    if (peer_op_code != OP_ANSWER || peer_args == NULL || counter < 2) {
+        if (peer_op_code != OP_ANSWER) {
+            fprintf(stderr, "Unexpected operation code from library %d: %d\n", library_id, peer_op_code);
+        } else {
+            fprintf(stderr, "Invalid borrow response from library %d: counter=%d\n", library_id, counter);
+        }
+        goto cleanup;
+    }
+
+    requestId peer_reqId = char_to_reqId(peer_args[0]);
+    if (peer_reqId != reqId) {
+        fprintf(stderr, "Mismatched reqId from library %d: expected %u, got %u\n", library_id, reqId, peer_reqId);
+        goto cleanup;
+    }
+
+    res_code = char_to_resultCode(peer_args[1]);
+    
+
+cleanup:
+    if (peer_args) {
+        for (int i = 0; i < counter; ++i) {
+            free(peer_args[i]);
+        }
+        free(peer_args);
+    }
+    free(peer_sizes);
+    return res_code;
+}
+
+
+static ResultCode borrow_from_remote_libraries(requestId reqId, const char* sender_id, const char* book_title, int* library_id_out) {
     for (size_t i = 1; i <= global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;  // Skip the current library
@@ -74,51 +112,61 @@ static void borrow_from_remote_libraries(requestId reqId, const char* sender_id,
         send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
         send_argument(peer_fd, sender_id);
         send_argument(peer_fd, book_title);
+        write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
 
-        char eot_check;
-        if (read(peer_fd, &eot_check, 1) > 0 && eot_check != END_OF_TRANSMISSION) {
-            lseek(peer_fd, -1, SEEK_CUR);
-        }
-
+        ResultCode resCode = get_borrow_response(peer_fd, reqId, (int)i, book_title);
         close(peer_fd);
+
+        if (resCode == RESULT_SUCCESS || resCode == ERROR_BOOK_ALREADY_BORROWED) {
+            *library_id_out = (int)i;
+            return resCode;
+        } else {
+            continue;  // Try the next library
+        }
     }
+
+    return ERROR_BOOK_NOT_FOUND;  // Indicate book not found in any library
 }
 
 void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
-    if (sender_type == SENDER_USER) {
-        send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
-        send_argument(socket_fd, reqId_to_char(reqId));              // reqId
 
-        bool book_found = false;
-        ResultCode res_code = RESULT_SUCCESS;
+    send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
+    send_argument(socket_fd, reqId_to_char(reqId));              // reqId
 
-        pthread_mutex_lock(&global_book_vector.mutex);
-        for (size_t i = 0; i < global_book_vector.size; ++i) {
-            Book* book = &global_book_vector.data[i];
-            if (strcmp(book->title, book_title) == 0) {
-                if (book->status == AVAILABLE) {
-                    book->status = BORROWED;
-                    res_code = RESULT_SUCCESS;
-                } else {
-                    res_code = ERROR_BOOK_ALREADY_BORROWED;
-                }
-                book_found = true;
-                break;
+    bool book_found = false;
+    ResultCode res_code = RESULT_SUCCESS;
+
+    pthread_mutex_lock(&global_book_vector.mutex);
+    for (size_t i = 0; i < global_book_vector.size; ++i) {
+        Book* book = &global_book_vector.data[i];
+        if (strcmp(book->title, book_title) == 0) {
+            if (book->status == AVAILABLE) {
+                book->status = BORROWED;
+                res_code = RESULT_SUCCESS;
+            } else {
+                res_code = ERROR_BOOK_ALREADY_BORROWED;
             }
-        }
-        pthread_mutex_unlock(&global_book_vector.mutex);
-
-        if (book_found) {
-            send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
-        } else {
-            borrow_from_remote_libraries(reqId, sender_id, book_title);
+            book_found = true;
+            break;
         }
     }
+    pthread_mutex_unlock(&global_book_vector.mutex);
 
-    char eot = END_OF_TRANSMISSION;
-    write(socket_fd, &eot, 1);  // Signal end of transmission
+
+    if (book_found) {
+        send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
+    } else if (sender_type == SENDER_USER) {
+        int library_id = -1;
+        res_code = borrow_from_remote_libraries(reqId, sender_id, book_title, &library_id);
+        send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
+        
+    } else {
+        send_argument(socket_fd, resultCode_to_char(ERROR_BOOK_NOT_FOUND));  // Result code
+    }
+
+    write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
 }
 
 void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {

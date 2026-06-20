@@ -7,7 +7,7 @@
 #define MAX_AUTHOR_LENGTH 50
 #define MAX_BORROWER_LENGTH 50
 
-typedef enum { AVAILABLE, BORROWED } BookStatus;
+typedef enum { AVAILABLE, BORROWED, NOT_FOUND } BookStatus;
 
 // TODO: switch to heap save memory and avoid fixed size arrays for title and author
 typedef struct Book {

@@ -34,16 +34,16 @@ OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int
         if (!new_sizes) {
             perror("realloc sizes");
             free(tmp);
-            break;
+            goto cleanup;
         }
         sizes = new_sizes;
         sizes[counter] = tmp_size;
 
-        char** new_args = (char**)realloc((void*)args, (counter + 1) * sizeof(char*));
+        char** new_args = realloc(args, (counter + 1) * sizeof(char*));
         if (!new_args) {
             perror("realloc args");
             free(tmp);
-            break;
+            goto cleanup;
         }
         args = new_args;
         args[counter] = tmp;
@@ -53,6 +53,17 @@ OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int
     *args_out = args;
     *sizes_out = sizes;
     *counter_out = counter;
+    return op_code;
+
+cleanup:
+    for (int i = 0; i < counter; ++i) {
+        free(args[i]);
+    }
+    free(args);
+    free(sizes);
+    *args_out = NULL;
+    *sizes_out = NULL;
+    *counter_out = 0;
     return op_code;
 }
 
