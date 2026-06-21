@@ -38,6 +38,36 @@ void handle_register(int socket_fd, requestId reqId, const char* username) {
     write(socket_fd, &eot, 1);
 }
 
+static bool match_wildcard(const char* pattern, const char* str) {
+    if (*pattern == '\0') {
+        return *str == '\0';
+    }
+    if (*pattern == '*') {
+        while (*pattern == '*') {
+            pattern++;
+        }
+        if (*pattern == '\0') {
+            return true;
+        }
+        while (*str != '\0') {
+            if (match_wildcard(pattern, str)) {
+                return true;
+            }
+            str++;
+        }
+        return false;
+    }
+    if (*pattern == '?') {
+        if (*str == '\0') {
+            return false;
+        }
+        return match_wildcard(pattern + 1, str + 1);
+    }
+    return (*pattern == *str) && match_wildcard(pattern + 1, str + 1);
+}
+
+static bool has_wildcards(const char* str) { return strchr(str, '*') != NULL || strchr(str, '?') != NULL; }
+
 static bool title_matches(SearchType search_type, const char* search_term, const Book* book) {
     if (!search_term) {
         return false;
@@ -45,13 +75,25 @@ static bool title_matches(SearchType search_type, const char* search_term, const
 
     switch (search_type) {
         case SEARCH_BY_TITLE:
+            if (has_wildcards(search_term)) {
+                return match_wildcard(search_term, book->title);
+            }
             return (search_term[0] == '\0' || strstr(book->title, search_term) != NULL) != 0;
         case SEARCH_BY_AUTHOR:
+            if (has_wildcards(search_term)) {
+                return match_wildcard(search_term, book->author);
+            }
             return (search_term[0] == '\0' || strstr(book->author, search_term) != NULL) != 0;
         case SEARCH_BY_YEAR: {
-            char* endptr = NULL;
-            long year = strtol(search_term, &endptr, 10);
-            return (endptr && *endptr == '\0' && book->publicationYear == (int)year) != 0;
+            if (has_wildcards(search_term)) {
+                char year_str[12];
+                snprintf(year_str, sizeof(year_str), "%d", book->publicationYear);
+                return match_wildcard(search_term, year_str);
+            } else {
+                char* endptr = NULL;
+                long year = strtol(search_term, &endptr, 10);
+                return (endptr && *endptr == '\0' && book->publicationYear == (int)year) != 0;
+            }
         }
         default:
             return false;
