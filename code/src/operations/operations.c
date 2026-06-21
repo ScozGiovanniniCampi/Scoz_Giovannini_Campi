@@ -42,6 +42,12 @@ static bool match_wildcard(const char* pattern, const char* str) {
     if (*pattern == '\0') {
         return *str == '\0';
     }
+    if (*pattern == '\\') {
+        if (*(pattern + 1) == '\0') {
+            return *str == '\\' && *(str + 1) == '\0';
+        }
+        return (*(pattern + 1) == *str) && match_wildcard(pattern + 2, str + 1);
+    }
     if (*pattern == '*') {
         while (*pattern == '*') {
             pattern++;
@@ -66,7 +72,7 @@ static bool match_wildcard(const char* pattern, const char* str) {
     return (*pattern == *str) && match_wildcard(pattern + 1, str + 1);
 }
 
-static bool has_wildcards(const char* str) { return strchr(str, '*') != NULL || strchr(str, '?') != NULL; }
+static bool has_wildcards(const char* str) { return strchr(str, '*') != NULL || strchr(str, '?') != NULL || strchr(str, '\\') != NULL; }
 
 static bool title_matches(SearchType search_type, const char* search_term, const Book* book) {
     if (!search_term) {
@@ -78,12 +84,12 @@ static bool title_matches(SearchType search_type, const char* search_term, const
             if (has_wildcards(search_term)) {
                 return match_wildcard(search_term, book->title);
             }
-            return (search_term[0] == '\0' || strstr(book->title, search_term) != NULL) != 0;
+            return (search_term[0] == '\0' || strcmp(book->title, search_term) == 0) != 0;
         case SEARCH_BY_AUTHOR:
             if (has_wildcards(search_term)) {
                 return match_wildcard(search_term, book->author);
             }
-            return (search_term[0] == '\0' || strstr(book->author, search_term) != NULL) != 0;
+            return (search_term[0] == '\0' || strcmp(book->author, search_term) == 0) != 0;
         case SEARCH_BY_YEAR: {
             if (has_wildcards(search_term)) {
                 char year_str[12];
