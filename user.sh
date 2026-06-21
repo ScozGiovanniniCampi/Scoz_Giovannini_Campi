@@ -97,8 +97,8 @@ case "$OPERATION" in
                 exit 1
                 ;;
         esac
-        # Payload: OP_SEARCH (2) | REQ_ID | SEARCH_TYPE | SEARCH_TERM
-        build_payload 2 "$REQ_ID" "$SEARCH_TYPE" "$SEARCH_TERM"
+        # Payload: OP_SEARCH (2) | REQ_ID | SENDER_USER (0) | SEARCH_TYPE | SEARCH_TERM
+        build_payload 2 "$REQ_ID" 0 "$SEARCH_TYPE" "$SEARCH_TERM"
         ;;
     *)
         echo "Error: Unknown operation '$OPERATION'. Must be register, borrow, return, or search." >&2
@@ -106,8 +106,9 @@ case "$OPERATION" in
         ;;
 esac
 
-# Send payload to library process and capture response
-RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 5 -U "$SOCKET_PATH" 2>/dev/null || true)
+# TODO: decrease wait when search and borrow execute in parallel
+# Send payload to library process and capture response (waits max 120 seconds)
+RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 120 -U "$SOCKET_PATH" 2>/dev/null || true)
 
 if [ -z "$RESPONSE" ]; then
     echo "Error: No response from the library process at '${SOCKET_PATH}'." >&2
@@ -117,6 +118,8 @@ fi
 # Parse response (split fields on ETX, stripping EOT)
 # Note: The response is formatted as RESP_OP \x03 REQ_ID \x03 RESULT_CODE \x03 \x04
 IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
+
+# TODO: fix search result by interpreting in a different way (3 [request_id]  <book_count> <books_vector> <books_vector>)
 
 RESP_OP="${FIELDS[0]}"
 RESP_REQ_ID="${FIELDS[1]}"
