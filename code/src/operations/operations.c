@@ -14,12 +14,9 @@
 #include "models/book.h"
 
 
-
-
 void handle_answer(int socket_fd, requestId reqId, ResultCode result_code) {
     (void)socket_fd;
-    (void)reqId;
-    (void)result_code;
+    printf("[Library %u] Received answer: reqId=%u, result_code=%d\n", global_library_id, reqId, result_code);
 }
 
 void handle_register(int socket_fd, requestId reqId, const char* username) {
