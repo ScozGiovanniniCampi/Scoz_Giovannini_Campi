@@ -1,7 +1,7 @@
 op_code,from,to,operation description,data,,,msg structure
 0,all,all,generic_answer,result_code,,,0 [request_id]  <result_code>
 1,user,library,register with a library,username,,,1 [request_id]  <username> <username>
-2,user/library,library,search for a book in a library,search_type,search_term,,2 [request_id]  <search_type> <search_term> <search_term>
+2,user/library,library,search for a book in a library,sender_type,search_type,search_term,2 [request_id]  <sender_type> <search_type> <search_term>
 3,library,user/library,Search result: list of books that match search parameters,book_count,books_vector,,3 [request_id]  <book_count> <books_vector> <books_vector>
 4,user/library,library,borrow a book from a library,sender_type,username/lib_id,book_title,4 [request_id]  <sender_type> <username/lib_id> <book_title>
 5,user/library,library,return a book to a library,sender_type,username/lib_id,book_title,5 [request_id]  <sender_type> <username/lib_id> <book_title>

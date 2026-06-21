@@ -10,6 +10,11 @@
 #include "network/messages.h"
 #include "network/socket.h"
 #include "utils/util.h"
+#include "utils/book_loader.h"
+#include "models/book.h"
+
+
+
 
 void handle_answer(int socket_fd, requestId reqId, ResultCode result_code) {
     (void)socket_fd;
@@ -44,22 +49,216 @@ void handle_register(int socket_fd, requestId reqId, const char* username) {
     write(socket_fd, &eot, 1);
 }
 
-void handle_search(int socket_fd, requestId reqId, SearchType search_type, const char* search_term) {
-    (void)socket_fd;
-    (void)reqId;
-    (void)search_type;
-    (void)search_term;
+static bool title_matches(SearchType search_type, const char* search_term, const Book* book) {
+    if (!search_term) {
+        return false;
+    }
+
+    switch (search_type) {
+        case SEARCH_BY_TITLE:
+            return search_term[0] == '\0' || strstr(book->title, search_term) != NULL;
+        case SEARCH_BY_AUTHOR:
+            return search_term[0] == '\0' || strstr(book->author, search_term) != NULL;
+        case SEARCH_BY_YEAR: {
+            char* endptr = NULL;
+            long year = strtol(search_term, &endptr, 10);
+            return endptr && *endptr == '\0' && book->publicationYear == (int)year;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool search_list_contains(const char** titles, size_t count, const char* title) {
+    for (size_t i = 0; i < count; ++i) {
+        if (strcmp(titles[i], title) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void free_search_results(char** results, size_t count) {
+    if (!results) {
+        return;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        free(results[i]);
+    }
+    free(results);
+}
+
+static bool add_search_title(char*** titles_out, size_t* count_out, size_t* capacity_out, const char* title) {
+    if (*count_out > 0 && search_list_contains((const char**)*titles_out, *count_out, title)) {
+        return true;
+    }
+
+    if (*count_out >= *capacity_out) {
+        size_t new_capacity = *capacity_out == 0 ? 4 : *capacity_out * 2;
+        char** new_titles = realloc(*titles_out, new_capacity * sizeof(char*));
+        if (!new_titles) {
+            perror("realloc");
+            return false;
+        }
+        *titles_out = new_titles;
+        *capacity_out = new_capacity;
+    }
+
+    char* title_copy = strdup(title);
+    if (!title_copy) {
+        perror("strdup");
+        return false;
+    }
+    (*titles_out)[(*count_out)++] = title_copy;
+    return true;
+}
+
+static char** collect_local_search_results(SearchType search_type, const char* search_term, size_t* out_count) {
+    char** results = NULL;
+    size_t count = 0;
+    size_t capacity = 0;
+
+    pthread_mutex_lock(&global_book_vector.mutex);
+    for (size_t i = 0; i < global_book_vector.size; ++i) {
+        Book* book = &global_book_vector.data[i];
+        if (title_matches(search_type, search_term, book)) {
+            if (!add_search_title(&results, &count, &capacity, book->title)) {
+                free_search_results(results, count);
+                results = NULL;
+                count = 0;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&global_book_vector.mutex);
+
+    *out_count = count;
+    return results;
+}
+
+static char** collect_remote_search_results(requestId reqId, SearchType search_type, const char* search_term, size_t* out_count) {
+    char** results = NULL;
+    size_t count = 0;
+    size_t capacity = 0;
+    bool failed = false;
+
+    for (int i = 1; i <= global_num_total_libraries && !failed; ++i) {
+        if (i == global_library_id) {
+            continue;
+        }
+
+        int peer_fd = socket_connect_to_server(i);
+        if (peer_fd < 0) {
+            fprintf(stderr, "Failed to connect to library %d\n", i);
+            continue;
+        }
+
+        send_argument(peer_fd, operationType_to_char(OP_SEARCH));
+        send_argument(peer_fd, reqId_to_char(reqId));
+        send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+        send_argument(peer_fd, searchType_to_char(search_type));
+        send_argument(peer_fd, search_term);
+        write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
+
+        char** peer_args = NULL;
+        size_t* peer_sizes = NULL;
+        int peer_counter = 0;
+        OperationType peer_op_code = fetch_arguments(peer_fd, &peer_args, &peer_sizes, &peer_counter);
+
+        if (peer_op_code != OP_SEARCH_RESULT || peer_args == NULL || peer_counter < 2) {
+            if (peer_op_code != OP_SEARCH_RESULT) {
+                fprintf(stderr, "Unexpected operation code from library %d: %d\n", i, peer_op_code);
+            } else {
+                fprintf(stderr, "Invalid search response from library %d: counter=%d\n", i, peer_counter);
+            }
+        } else {
+            int book_count = (int)strtol(peer_args[1], NULL, 10);
+            if (peer_counter == 2 + book_count) {
+                for (int j = 0; j < book_count; ++j) {
+                    const char* title = peer_args[2 + j];
+                    if (!add_search_title(&results, &count, &capacity, title)) {
+                        free_search_results(results, count);
+                        results = NULL;
+                        count = 0;
+                        failed = true;
+                        break;
+                    }
+                }
+            } else {
+                fprintf(stderr, "Malformed search response from library %d: expected %d titles, got %d\n", i, book_count, peer_counter - 2);
+            }
+        }
+
+        if (peer_args) {
+            for (int j = 0; j < peer_counter; ++j) {
+                free(peer_args[j]);
+            }
+            free(peer_args);
+        }
+        free(peer_sizes);
+        close(peer_fd);
+    }
+
+    *out_count = count;
+    return results;
+}
+
+void handle_search(int socket_fd, requestId reqId, SenderType sender_type, SearchType search_type, const char* search_term) {
+    printf("[Library %u] Handling search request: reqId=%d, sender_type=%d, search_type=%d, search_term=%s\n",
+           global_library_id, reqId, sender_type, search_type, search_term ? search_term : "");
+
+    size_t local_count = 0;
+    char** local_results = collect_local_search_results(search_type, search_term, &local_count);
+
+    size_t remote_count = 0;
+    char** remote_results = NULL;
+    if (sender_type != SENDER_LIBRARY) {
+        remote_results = collect_remote_search_results(reqId, search_type, search_term, &remote_count);
+    }
+
+    char** final_results = NULL;
+    size_t final_count = 0;
+    size_t final_capacity = 0;
+    bool final_failed = false;
+
+    for (size_t i = 0; i < local_count; ++i) {
+        if (!add_search_title(&final_results, &final_count, &final_capacity, local_results[i])) {
+            fprintf(stderr, "Search aggregation failed while adding local results\n");
+            final_failed = true;
+            break;
+        }
+    }
+    for (size_t i = 0; i < remote_count && !final_failed; ++i) {
+        if (!add_search_title(&final_results, &final_count, &final_capacity, remote_results[i])) {
+            fprintf(stderr, "Search aggregation failed while adding remote results\n");
+            final_failed = true;
+            break;
+        }
+    }
+
+    send_argument(socket_fd, operationType_to_char(OP_SEARCH_RESULT));
+    send_argument(socket_fd, reqId_to_char(reqId));
+    send_argument(socket_fd, size_t_to_char(final_count));
+    for (size_t i = 0; i < final_count; ++i) {
+        send_argument(socket_fd, final_results[i]);
+    }
+    write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
+
+    free_search_results(local_results, local_count);
+    free_search_results(remote_results, remote_count);
+    free_search_results(final_results, final_count);
 }
 
 void handle_search_result(int socket_fd, requestId reqId, int book_count, const char** books) {
     (void)socket_fd;
-    (void)reqId;
-    (void)book_count;
-    (void)books;
+    printf("[Library %u] Received search result: reqId=%u, book_count=%d\n", global_library_id, reqId, book_count);
+    for (int i = 0; i < book_count; ++i) {
+        printf("[Library %u]   %s\n", global_library_id, books[i]);
+    }
 }
 
-
 static ResultCode get_borrow_response(int peer_fd, requestId reqId, int library_id, const char* book_title) {
+    (void)book_title;
     char** peer_args = NULL;
     size_t* peer_sizes = NULL;
     int counter = 0;
@@ -95,15 +294,14 @@ cleanup:
     return res_code;
 }
 
-
 static ResultCode borrow_from_remote_libraries(requestId reqId, const char* sender_id, const char* book_title, int* library_id_out) {
-    for (size_t i = 1; i <= global_num_total_libraries; ++i) {
+    for (int i = 1; i <= global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;  // Skip the current library
         }
-        int peer_fd = socket_connect_to_server((int)i);
+        int peer_fd = socket_connect_to_server(i);
         if (peer_fd < 0) {
-            fprintf(stderr, "Failed to connect to library %zu\n", i);
+            fprintf(stderr, "Failed to connect to library %d\n", i);
             continue;
         }
 
@@ -131,10 +329,6 @@ static ResultCode borrow_from_remote_libraries(requestId reqId, const char* send
 void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
-
-    send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
-    send_argument(socket_fd, reqId_to_char(reqId));              // reqId
-
     bool book_found = false;
     ResultCode res_code = RESULT_SUCCESS;
 
@@ -154,6 +348,8 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
+    send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
+    send_argument(socket_fd, reqId_to_char(reqId));              // reqId
 
     if (book_found) {
         send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
