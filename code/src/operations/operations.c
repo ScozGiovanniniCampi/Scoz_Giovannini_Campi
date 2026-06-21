@@ -322,6 +322,7 @@ static ResultCode borrow_from_remote_libraries(requestId reqId, const char* book
     return ERROR_BOOK_NOT_FOUND;  // Indicate book not found in any library
 }
 
+// TODO: check for who borrowed the book
 void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
@@ -361,6 +362,8 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
     write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
 }
 
+// TODO: check for who borrowed the book
+// TODO: if borrowed from another library forward the return
 void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling return request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
