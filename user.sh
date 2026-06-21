@@ -117,19 +117,33 @@ fi
 
 # Parse response (split fields on ETX, stripping EOT)
 # Note: The response is formatted as RESP_OP \x03 REQ_ID \x03 RESULT_CODE \x03 \x04
+# Or for search: RESP_OP \x03 REQ_ID \x03 BOOK_COUNT \x03 BOOK_TITLE_1 \x03 ...
 IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
-
-# TODO: fix search result by interpreting in a different way (3 [request_id]  <book_count> <books_vector> <books_vector>)
 
 RESP_OP="${FIELDS[0]}"
 RESP_REQ_ID="${FIELDS[1]}"
-RESULT_CODE="${FIELDS[2]}"
 
 # Ensure response matches our request ID
 if [ "$RESP_REQ_ID" -ne "$REQ_ID" ]; then
     echo "Error: Request ID mismatch. Expected $REQ_ID, got $RESP_REQ_ID." >&2
     exit 1
 fi
+
+# Interpret search results (OP_SEARCH_RESULT = 3)
+if [ "$RESP_OP" -eq 3 ]; then
+    BOOK_COUNT="${FIELDS[2]}"
+    if [ "$BOOK_COUNT" -eq 0 ]; then
+        echo "No books found matching search criteria."
+    else
+        echo "Search results ($BOOK_COUNT book(s) found):"
+        for ((i=3; i<3+BOOK_COUNT; i++)); do
+            echo "- ${FIELDS[i]}"
+        done
+    fi
+    exit 0
+fi
+
+RESULT_CODE="${FIELDS[2]}"
 
 # Handle the result code
 case "$RESULT_CODE" in
