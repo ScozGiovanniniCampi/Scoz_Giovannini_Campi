@@ -41,6 +41,12 @@ char* size_t_to_char(size_t value) {
     return buffer;
 }
 
+char* unsigned_int_to_char(unsigned int value) {
+    static __thread char buffer[32];
+    snprintf(buffer, sizeof(buffer), "%u", value);
+    return buffer;
+}
+
 requestId char_to_reqId(const char* str) {
     static __thread requestId reqId;
     reqId = (requestId)strtoul(str, NULL, 10);

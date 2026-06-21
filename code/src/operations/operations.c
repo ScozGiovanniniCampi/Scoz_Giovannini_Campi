@@ -179,7 +179,7 @@ static char** collect_remote_search_results(requestId reqId, SearchType search_t
     size_t capacity = 0;
     bool failed = false;
 
-    for (unsigned int i = 1; i <= global_num_total_libraries && !failed; ++i) {
+    for (unsigned int i = 0; i < global_num_total_libraries && !failed; ++i) {
         if (i == global_library_id) {
             continue;
         }
@@ -292,8 +292,8 @@ static ResultCode get_borrow_response(int peer_fd, requestId reqId, int library_
 }
 
 // TODO: change to use threads over for loop
-static ResultCode borrow_from_remote_libraries(requestId reqId, const char* sender_id, const char* book_title, int* library_id_out) {
-    for (unsigned int i = 1; i <= global_num_total_libraries; ++i) {
+static ResultCode borrow_from_remote_libraries(requestId reqId, const char* book_title, int* library_id_out) {
+    for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;  // Skip the current library
         }
@@ -306,7 +306,7 @@ static ResultCode borrow_from_remote_libraries(requestId reqId, const char* send
         send_argument(peer_fd, operationType_to_char(OP_BORROW));
         send_argument(peer_fd, reqId_to_char(reqId));
         send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
-        send_argument(peer_fd, sender_id);
+        send_argument(peer_fd, unsigned_int_to_char(global_library_id));
         send_argument(peer_fd, book_title);
         write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
 
@@ -351,7 +351,7 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
         send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
     } else if (sender_type == SENDER_USER) {
         int library_id = -1;
-        res_code = borrow_from_remote_libraries(reqId, sender_id, book_title, &library_id);
+        res_code = borrow_from_remote_libraries(reqId, book_title, &library_id);
         send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
 
     } else {
