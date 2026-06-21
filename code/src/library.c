@@ -144,8 +144,8 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL));  // Initialize random seed
 
-    global_library_id = (int)strtol(argv[1], NULL, 10);
-    global_num_total_libraries = (int)strtol(argv[2], NULL, 10);
+    global_library_id = (unsigned int)strtol(argv[1], NULL, 10);
+    global_num_total_libraries = (unsigned int)strtol(argv[2], NULL, 10);
 
     // Initialize global vectors
     global_book_vector = loadBooksFromFile(argv[3]);
