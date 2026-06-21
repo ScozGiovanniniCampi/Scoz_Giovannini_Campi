@@ -23,8 +23,8 @@ bool add_user_to_vector(const RegisteredUser* user);
 RegisteredUser* remove_user_from_vector(size_t index);
 void free_user_vector();
 
-#define add_book_to_vector(x, y) _Generic((x), BookVector*: add_book_to_vector_normal, BorrowedBookVector*: add_book_to_vector_borrowed)(x, y)
+#define add_book_to_vector(x, y) _Generic((x), BookVector *: add_book_to_vector_normal, BorrowedBookVector *: add_book_to_vector_borrowed)(x, y)
 
-#define free_book_vector(x) _Generic((x), BookVector*: free_book_vector_normal, BorrowedBookVector*: free_borrowed_book_vector)(x)
+#define free_book_vector(x) _Generic((x), BookVector *: free_book_vector_normal, BorrowedBookVector *: free_borrowed_book_vector)(x)
 
 #endif  // VECTOR_H

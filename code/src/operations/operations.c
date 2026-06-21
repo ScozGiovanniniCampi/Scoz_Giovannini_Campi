@@ -6,18 +6,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "models/book.h"
 #include "models/vector.h"
 #include "network/messages.h"
 #include "network/socket.h"
-#include "utils/util.h"
 #include "utils/book_loader.h"
-#include "models/book.h"
-
-
-void handle_answer(int socket_fd, requestId reqId, ResultCode result_code) {
-    (void)socket_fd;
-    printf("[Library %u] Received answer: reqId=%u, result_code=%d\n", global_library_id, reqId, result_code);
-}
+#include "utils/util.h"
 
 void handle_register(int socket_fd, requestId reqId, const char* username) {
     printf("[Library %u] Handling register request: reqId=%d, username=%s\n", global_library_id, reqId, username);
@@ -201,8 +195,7 @@ static char** collect_remote_search_results(requestId reqId, SearchType search_t
 }
 
 void handle_search(int socket_fd, requestId reqId, SenderType sender_type, SearchType search_type, const char* search_term) {
-    printf("[Library %u] Handling search request: reqId=%d, sender_type=%d, search_type=%d, search_term=%s\n",
-           global_library_id, reqId, sender_type, search_type, search_term ? search_term : "");
+    printf("[Library %u] Handling search request: reqId=%d, sender_type=%d, search_type=%d, search_term=%s\n", global_library_id, reqId, sender_type, search_type, search_term ? search_term : "");
 
     size_t local_count = 0;
     char** local_results = collect_local_search_results(search_type, search_term, &local_count);
@@ -246,14 +239,6 @@ void handle_search(int socket_fd, requestId reqId, SenderType sender_type, Searc
     free_search_results(final_results, final_count);
 }
 
-void handle_search_result(int socket_fd, requestId reqId, int book_count, const char** books) {
-    (void)socket_fd;
-    printf("[Library %u] Received search result: reqId=%u, book_count=%d\n", global_library_id, reqId, book_count);
-    for (int i = 0; i < book_count; ++i) {
-        printf("[Library %u]   %s\n", global_library_id, books[i]);
-    }
-}
-
 static ResultCode get_borrow_response(int peer_fd, requestId reqId, int library_id, const char* book_title) {
     (void)book_title;
     char** peer_args = NULL;
@@ -278,7 +263,6 @@ static ResultCode get_borrow_response(int peer_fd, requestId reqId, int library_
     }
 
     res_code = char_to_resultCode(peer_args[1]);
-    
 
 cleanup:
     if (peer_args) {
@@ -354,7 +338,7 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
         int library_id = -1;
         res_code = borrow_from_remote_libraries(reqId, sender_id, book_title, &library_id);
         send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
-        
+
     } else {
         send_argument(socket_fd, resultCode_to_char(ERROR_BOOK_NOT_FOUND));  // Result code
     }
@@ -405,7 +389,7 @@ void handle_get_users(int socket_fd, requestId reqId) {
 
     pthread_mutex_lock(&global_user_vector.mutex);
     size_t count = global_user_vector.size;
-    char (*temp_users)[MAX_USER_LENGTH] = NULL;
+    char(*temp_users)[MAX_USER_LENGTH] = NULL;
     if (count > 0) {
         temp_users = malloc(count * sizeof(*temp_users));
         if (temp_users) {
@@ -428,13 +412,6 @@ void handle_get_users(int socket_fd, requestId reqId) {
 
     char eot = END_OF_TRANSMISSION;
     write(socket_fd, &eot, 1);
-}
-
-void handle_users_result(int socket_fd, requestId reqId, int user_count, const char** users) {
-    (void)socket_fd;
-    (void)reqId;
-    (void)user_count;
-    (void)users;
 }
 
 void handle_get_books(int socket_fd, requestId reqId) {
@@ -462,11 +439,4 @@ void handle_get_books(int socket_fd, requestId reqId) {
 
     char eot = END_OF_TRANSMISSION;
     write(socket_fd, &eot, 1);
-}
-
-void handle_books_result(int socket_fd, requestId reqId, int book_count, const char** books) {
-    (void)socket_fd;
-    (void)reqId;
-    (void)book_count;
-    (void)books;
 }

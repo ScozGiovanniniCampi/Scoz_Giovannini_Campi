@@ -13,8 +13,6 @@
 #include "utils/book_loader.h"
 #include "utils/util.h"
 
-
-
 static int is_counter_valid(OperationType op_code, int counter, char** args) {
     switch (op_code) {
         case OP_ANSWER:
@@ -44,7 +42,7 @@ static int is_counter_valid(OperationType op_code, int counter, char** args) {
 static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, char** args) {
     switch (op_code) {
         case OP_ANSWER:
-            handle_answer(cfd, reqId, char_to_resultCode(args[1]));
+            printf("[Library %u] Received answer: reqId=%u, result_code=%d\n", global_library_id, reqId, char_to_resultCode(args[1]));
             break;
         case OP_REGISTER:
             handle_register(cfd, reqId, args[1]);
@@ -54,7 +52,7 @@ static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, 
             break;
         case OP_SEARCH_RESULT: {
             int count = (int)strtol(args[1], NULL, 10);
-            handle_search_result(cfd, reqId, count, (const char**)&args[2]);
+            printf("[Library %u] Received search result: reqId=%u, book_count=%d\n", global_library_id, reqId, count);
             break;
         }
         case OP_BORROW:
@@ -68,7 +66,7 @@ static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, 
             break;
         case OP_USERS_RESULT: {
             int count = (int)strtol(args[1], NULL, 10);
-            handle_users_result(cfd, reqId, count, (const char**)&args[2]);
+            printf("[Library %u] Received users result: reqId=%u, user_count=%d\n", global_library_id, reqId, count);
             break;
         }
         case OP_GET_BOOKS:
@@ -76,7 +74,7 @@ static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, 
             break;
         case OP_BOOKS_RESULT: {
             int count = (int)strtol(args[1], NULL, 10);
-            handle_books_result(cfd, reqId, count, (const char**)&args[2]);
+            printf("[Library %u] Received books result: reqId=%u, book_count=%d\n", global_library_id, reqId, count);
             break;
         }
         default:

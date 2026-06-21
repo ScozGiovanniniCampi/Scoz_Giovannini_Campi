@@ -68,7 +68,6 @@ OperationType read_operator(int socket_fd) {
     return op_code;
 }
 
-
 OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
     OperationType op_code = read_operator(cfd);
 
