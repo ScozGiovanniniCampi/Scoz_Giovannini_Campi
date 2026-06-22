@@ -80,9 +80,8 @@ case "$OPERATION" in
         ;;
 esac
 
-# TODO: decrease wait when search and borrow execute in parallel
-# Send payload to library process and capture response (waits max 120 seconds)
-RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 120 -U "$SOCKET_PATH" 2>/dev/null || true)
+# Send payload to library process and capture response (waits max 11 seconds: 1-5 random wait for library + 1-5 random wait for other libraries + 1 second buffer)
+RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 11 -U "$SOCKET_PATH" 2>/dev/null || true)
 
 if [ -z "$RESPONSE" ]; then
     echo "Error: No response from the library process at '${SOCKET_PATH}'." >&2

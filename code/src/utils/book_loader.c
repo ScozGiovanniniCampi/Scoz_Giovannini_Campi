@@ -110,13 +110,6 @@ BookVector loadBooksFromFile(const char* filename) {
     size_t len = 0;
     ssize_t nread;
 
-    /* skip header line (if present) */
-    if (getline(&line, &len, file) == -1) {
-        free(line);
-        fclose(file);
-        return books;
-    }
-
     while ((nread = getline(&line, &len, file)) != -1) {
         if (nread > 0 && line[nread - 1] == '\n') {
             line[nread - 1] = '\0';

@@ -3,10 +3,10 @@ CC = gcc
 
 # Compiler flags: enable warnings, treat warnings as errors, use C11, include debug symbols,
 # and expose POSIX interfaces such as strnlen.
-CFLAGS = -Wall -Wextra -Werror -std=c11 -g -D_POSIX_C_SOURCE=200809L
+CFLAGS = -Wall -Wextra -Werror -std=c11 -g -D_POSIX_C_SOURCE=200809L -pthread
 
 # Linker flags: empty by default, but can be extended if needed.
-LDFLAGS =
+LDFLAGS = -pthread
 
 # Source and expected output locations.
 SRC_DIR = code/src

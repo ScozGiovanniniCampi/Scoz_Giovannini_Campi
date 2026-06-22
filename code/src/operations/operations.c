@@ -238,38 +238,132 @@ static bool process_peer_search_response(int peer_fd, unsigned int library_id, c
     return success;
 }
 
-// TODO: change to use threads over for loop
-static char** collect_remote_search_results(SearchType search_type, const char* search_term, size_t* out_count) {
-    char** results = NULL;
-    size_t count = 0;
-    size_t capacity = 0;
-    bool failed = false;
+typedef struct {
+    SearchType search_type;
+    const char* search_term;
+    unsigned int peer_library_id;
+    char** results;
+    size_t count;
+    bool connection_failed;
+    bool response_failed;
+} SearchThreadArg;
 
-    for (unsigned int i = 0; i < global_num_total_libraries && !failed; ++i) {
+static void* search_remote_library_thread(void* arg) {
+    SearchThreadArg* search_arg = (SearchThreadArg*)arg;
+    int peer_fd = socket_connect_to_server((int)search_arg->peer_library_id);
+    if (peer_fd < 0) {
+        fprintf(stderr, "Failed to connect to library %d\n", search_arg->peer_library_id);
+        search_arg->connection_failed = true;
+        return NULL;
+    }
+
+    send_search_request(peer_fd, search_arg->search_type, search_arg->search_term);
+
+    size_t capacity = 0;
+    if (!process_peer_search_response(peer_fd, search_arg->peer_library_id, &search_arg->results, &search_arg->count, &capacity)) {
+        search_arg->response_failed = true;
+    }
+
+    close(peer_fd);
+    return NULL;
+}
+
+static unsigned int launch_search_threads(pthread_t* threads, SearchThreadArg* args, SearchType search_type, const char* search_term) {
+    unsigned int thread_index = 0;
+    for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;
         }
 
-        int peer_fd = socket_connect_to_server((int)i);
-        if (peer_fd < 0) {
-            fprintf(stderr, "Failed to connect to library %d\n", i);
+        args[thread_index].search_type = search_type;
+        args[thread_index].search_term = search_term;
+        args[thread_index].peer_library_id = i;
+        args[thread_index].results = NULL;
+        args[thread_index].count = 0;
+        args[thread_index].connection_failed = false;
+        args[thread_index].response_failed = false;
+
+        if (pthread_create(&threads[thread_index], NULL, search_remote_library_thread, &args[thread_index]) != 0) {
+            perror("pthread_create");
+            args[thread_index].response_failed = true;
+        } else {
+            thread_index++;
+        }
+    }
+    return thread_index;
+}
+
+static bool aggregate_search_results(SearchThreadArg* args, unsigned int actual_threads, char*** final_results, size_t* final_count, size_t* final_capacity) {
+    for (unsigned int i = 0; i < actual_threads; ++i) {
+        if (args[i].connection_failed || args[i].response_failed) {
             continue;
         }
-
-        send_search_request(peer_fd, search_type, search_term);
-
-        if (!process_peer_search_response(peer_fd, i, &results, &count, &capacity)) {
-            free_search_results(results, count);
-            results = NULL;
-            count = 0;
-            failed = true;
+        for (size_t j = 0; j < args[i].count; ++j) {
+            if (!add_search_title(final_results, final_count, final_capacity, args[i].results[j])) {
+                return false;
+            }
         }
+    }
+    return true;
+}
 
-        close(peer_fd);
+static char** collect_remote_search_results(SearchType search_type, const char* search_term, size_t* out_count) {
+    unsigned int num_threads = 0;
+    if (global_num_total_libraries > 1) {
+        num_threads = global_num_total_libraries - 1;
     }
 
-    *out_count = count;
-    return results;
+    if (num_threads == 0) {
+        *out_count = 0;
+        return NULL;
+    }
+
+    pthread_t* threads = calloc(num_threads, sizeof(pthread_t));
+    SearchThreadArg* args = calloc(num_threads, sizeof(SearchThreadArg));
+    if (!threads || !args) {
+        perror("calloc");
+        free(threads);
+        free(args);
+        *out_count = 0;
+        return NULL;
+    }
+
+    unsigned int actual_threads = launch_search_threads(threads, args, search_type, search_term);
+
+    bool failed = false;
+    for (unsigned int i = 0; i < actual_threads; ++i) {
+        pthread_join(threads[i], NULL);
+        if (args[i].response_failed) {
+            failed = true;
+        }
+    }
+
+    char** final_results = NULL;
+    size_t final_count = 0;
+    size_t final_capacity = 0;
+
+    if (!failed) {
+        if (!aggregate_search_results(args, actual_threads, &final_results, &final_count, &final_capacity)) {
+            failed = true;
+        }
+    }
+
+    // Cleanup all thread results
+    for (unsigned int i = 0; i < actual_threads; ++i) {
+        free_search_results(args[i].results, args[i].count);
+    }
+
+    free(threads);
+    free(args);
+
+    if (failed) {
+        free_search_results(final_results, final_count);
+        *out_count = 0;
+        return NULL;
+    }
+
+    *out_count = final_count;
+    return final_results;
 }
 
 void handle_search(int socket_fd, UserType user_type, SearchType search_type, const char* search_term) {
@@ -349,34 +443,88 @@ static ResultCode get_borrow_response(int peer_fd, int library_id, const char* b
     return res_code;
 }
 
-// TODO: change to use threads over for loop
+typedef struct {
+    const char* book_title;
+    unsigned int peer_library_id;
+    ResultCode result_code;
+} BorrowThreadArg;
+
+static void* borrow_remote_library_thread(void* arg) {
+    BorrowThreadArg* borrow_arg = (BorrowThreadArg*)arg;
+    int peer_fd = socket_connect_to_server((int)borrow_arg->peer_library_id);
+    if (peer_fd < 0) {
+        fprintf(stderr, "Failed to connect to library %d\n", borrow_arg->peer_library_id);
+        borrow_arg->result_code = ERROR_BOOK_NOT_FOUND;
+        return NULL;
+    }
+
+    send_argument(peer_fd, operationType_to_char(OP_BORROW));
+    send_argument(peer_fd, userType_to_char(USER_LIBRARY));
+    send_argument(peer_fd, unsigned_int_to_char(global_library_id));
+    send_argument(peer_fd, borrow_arg->book_title);
+    write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
+
+    borrow_arg->result_code = get_borrow_response(peer_fd, (int)borrow_arg->peer_library_id, borrow_arg->book_title);
+    close(peer_fd);
+    return NULL;
+}
+
 static ResultCode borrow_from_remote_libraries(const char* book_title, int* library_id_out) {
+    unsigned int num_threads = 0;
+    if (global_num_total_libraries > 1) {
+        num_threads = global_num_total_libraries - 1;
+    }
+
+    if (num_threads == 0) {
+        return ERROR_BOOK_NOT_FOUND;
+    }
+
+    pthread_t* threads = calloc(num_threads, sizeof(pthread_t));
+    BorrowThreadArg* args = calloc(num_threads, sizeof(BorrowThreadArg));
+    if (!threads || !args) {
+        perror("calloc");
+        free(threads);
+        free(args);
+        return ERROR_BOOK_NOT_FOUND;
+    }
+
+    unsigned int thread_index = 0;
     for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;  // Skip the current library
         }
-        int peer_fd = socket_connect_to_server((int)i);
-        if (peer_fd < 0) {
-            fprintf(stderr, "Failed to connect to library %d\n", i);
-            continue;
-        }
 
-        send_argument(peer_fd, operationType_to_char(OP_BORROW));
-        send_argument(peer_fd, userType_to_char(USER_LIBRARY));
-        send_argument(peer_fd, unsigned_int_to_char(global_library_id));
-        send_argument(peer_fd, book_title);
-        write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
+        args[thread_index].book_title = book_title;
+        args[thread_index].peer_library_id = i;
+        args[thread_index].result_code = ERROR_BOOK_NOT_FOUND;
 
-        ResultCode resCode = get_borrow_response(peer_fd, (int)i, book_title);
-        close(peer_fd);
-
-        if (resCode == RESULT_SUCCESS || resCode == ERROR_BOOK_ALREADY_BORROWED) {
-            *library_id_out = (int)i;
-            return resCode;
+        if (pthread_create(&threads[thread_index], NULL, borrow_remote_library_thread, &args[thread_index]) != 0) {
+            perror("pthread_create");
+            args[thread_index].result_code = ERROR_BOOK_NOT_FOUND;
+        } else {
+            thread_index++;
         }
     }
 
-    return ERROR_BOOK_NOT_FOUND;  // Indicate book not found in any library
+    unsigned int actual_threads = thread_index;
+    ResultCode final_result = ERROR_BOOK_NOT_FOUND;
+    int success_library_id = -1;
+
+    for (unsigned int i = 0; i < actual_threads; ++i) {
+        pthread_join(threads[i], NULL);
+        if (args[i].result_code == RESULT_SUCCESS || args[i].result_code == ERROR_BOOK_ALREADY_BORROWED) {
+            final_result = args[i].result_code;
+            success_library_id = (int)args[i].peer_library_id;
+        }
+    }
+
+    free(threads);
+    free(args);
+
+    if (success_library_id != -1) {
+        *library_id_out = success_library_id;
+    }
+    return final_result;
 }
 
 static ResultCode check_user_can_borrow(const char* username) {
