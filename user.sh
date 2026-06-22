@@ -167,6 +167,26 @@ case "$RESULT_CODE" in
         echo "Error: Book is already borrowed." >&2
         exit 1
         ;;
+    5)
+        echo "Error: User '$USERNAME' is already registered." >&2
+        exit 1
+        ;;
+    6)
+        echo "Error: User '$USERNAME' has already borrowed a book." >&2
+        exit 1
+        ;;
+    7)
+        echo "Error: Book is not borrowed." >&2
+        exit 1
+        ;;
+    8)
+        echo "Error: Book is not borrowed by user '$USERNAME'." >&2
+        exit 1
+        ;;
+    9)
+        echo "Error: User '$USERNAME' has no borrowed books." >&2
+        exit 1
+        ;;
     *)
         echo "Response: Received code $RESULT_CODE."
         exit 0

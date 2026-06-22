@@ -21,19 +21,35 @@
 void handle_register(int socket_fd, requestId reqId, const char* username) {
     printf("[Library %u] Handling register request: reqId=%d, username=%s\n", global_library_id, reqId, username);
 
-    RegisteredUser user;
-    memset(&user, 0, sizeof(user));
-    strncpy(user.name, username, MAX_USER_LENGTH - 1);
-    user.name[MAX_USER_LENGTH - 1] = '\0';
-    user.hasBorrowedBook = false;
+    ResultCode res_code = RESULT_SUCCESS;
 
     pthread_mutex_lock(&global_user_vector.mutex);
-    bool success = add_user_to_vector(&user);
+    bool already_registered = false;
+    for (size_t i = 0; i < global_user_vector.size; ++i) {
+        if (strcmp(global_user_vector.data[i].name, username) == 0) {
+            already_registered = true;
+            break;
+        }
+    }
+
+    if (already_registered) {
+        res_code = ERROR_USER_ALREADY_REGISTERED;
+    } else {
+        RegisteredUser user;
+        memset(&user, 0, sizeof(user));
+        strncpy(user.name, username, MAX_USER_LENGTH - 1);
+        user.name[MAX_USER_LENGTH - 1] = '\0';
+        user.hasBorrowedBook = false;
+
+        if (!add_user_to_vector(&user)) {
+            res_code = RESULT_FAILURE;
+        }
+    }
     pthread_mutex_unlock(&global_user_vector.mutex);
 
     send_argument(socket_fd, operationType_to_char(OP_ANSWER));
     send_argument(socket_fd, reqId_to_char(reqId));
-    send_argument(socket_fd, resultCode_to_char(success ? RESULT_SUCCESS : RESULT_FAILURE));
+    send_argument(socket_fd, resultCode_to_char(res_code));
 
     char eot = END_OF_TRANSMISSION;
     write(socket_fd, &eot, 1);
@@ -400,6 +416,7 @@ static void set_user_borrow_status(const char* username, bool status) {
 }
 
 static ResultCode return_to_remote_libraries(requestId reqId, const char* book_title) {
+    ResultCode final_res = ERROR_BOOK_NOT_FOUND;
     for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
         if (i == global_library_id) {
             continue;
@@ -423,8 +440,9 @@ static ResultCode return_to_remote_libraries(requestId reqId, const char* book_t
         if (resCode == RESULT_SUCCESS) {
             return RESULT_SUCCESS;
         }
+        final_res = resCode;
     }
-    return RESULT_FAILURE;
+    return final_res;
 }
 
 // TODO: check for who borrowed the book
@@ -498,6 +516,56 @@ void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const
     ResultCode res_code = RESULT_FAILURE;
     bool belongs_to_us = false;
 
+    if (sender_type == SENDER_USER) {
+        // 1. Check if user is registered and has borrowed a book
+        ResultCode user_check = ERROR_USER_NOT_REGISTERED;
+        bool user_has_borrowed = false;
+        pthread_mutex_lock(&global_user_vector.mutex);
+        for (size_t i = 0; i < global_user_vector.size; ++i) {
+            if (strcmp(global_user_vector.data[i].name, sender_id) == 0) {
+                user_has_borrowed = global_user_vector.data[i].hasBorrowedBook;
+                user_check = RESULT_SUCCESS;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&global_user_vector.mutex);
+
+        if (user_check != RESULT_SUCCESS) {
+            send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+            send_argument(socket_fd, reqId_to_char(reqId));
+            send_argument(socket_fd, resultCode_to_char(user_check));
+            write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
+            return;
+        }
+
+        if (!user_has_borrowed) {
+            send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+            send_argument(socket_fd, reqId_to_char(reqId));
+            send_argument(socket_fd, resultCode_to_char(ERROR_USER_HAS_NO_BORROWED_BOOK));
+            write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
+            return;
+        }
+
+        // 2. Check if the user borrowed this specific book
+        bool borrowed_this_book = false;
+        pthread_mutex_lock(&global_borrowed_book_vector.mutex);
+        for (size_t i = 0; i < global_borrowed_book_vector.size; ++i) {
+            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 && strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
+                borrowed_this_book = true;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&global_borrowed_book_vector.mutex);
+
+        if (!borrowed_this_book) {
+            send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+            send_argument(socket_fd, reqId_to_char(reqId));
+            send_argument(socket_fd, resultCode_to_char(ERROR_BOOK_NOT_BORROWED_BY_USER));
+            write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
+            return;
+        }
+    }
+
     pthread_mutex_lock(&global_book_vector.mutex);
     for (size_t i = 0; i < global_book_vector.size; ++i) {
         Book* book = &global_book_vector.data[i];
@@ -506,6 +574,8 @@ void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const
             if (book->status == BORROWED) {
                 book->status = AVAILABLE;
                 res_code = RESULT_SUCCESS;
+            } else {
+                res_code = ERROR_BOOK_NOT_BORROWED;
             }
             break;
         }
@@ -514,6 +584,8 @@ void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const
 
     if (!belongs_to_us && sender_type == SENDER_USER) {
         res_code = return_to_remote_libraries(reqId, book_title);
+    } else if (!belongs_to_us && sender_type == SENDER_LIBRARY) {
+        res_code = ERROR_BOOK_NOT_FOUND;
     }
 
     if (res_code == RESULT_SUCCESS && sender_type == SENDER_USER) {
