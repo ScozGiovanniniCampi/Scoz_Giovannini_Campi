@@ -3,8 +3,6 @@
 
 #include <stddef.h>
 
-typedef unsigned int requestId;
-
 typedef enum {
     OP_ANSWER = 0,
     OP_REGISTER = 1,
@@ -45,14 +43,12 @@ typedef enum {
     ERROR_USER_HAS_NO_BORROWED_BOOK = 9,
 } ResultCode;
 
-char* reqId_to_char(requestId reqId);
 char* resultCode_to_char(ResultCode result_code);
 char* operationType_to_char(OperationType op_type);
 char* searchType_to_char(SearchType search_type);
 char* userType_to_char(UserType user_type);
 char* size_t_to_char(size_t value);
 char* unsigned_int_to_char(unsigned int value);
-requestId char_to_reqId(const char* str);
 ResultCode char_to_resultCode(const char* str);
 OperationType char_to_operationType(const char* str);
 SearchType char_to_searchType(const char* str);

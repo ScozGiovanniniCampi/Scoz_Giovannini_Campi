@@ -31,37 +31,11 @@ build_payload() {
     PAYLOAD="$*${ETX}${EOT}"
 }
 
-# Generate/increment a persistent counter per username safely using flock
-STATE_DIR="/tmp/lib_user_state"
-mkdir -p "$STATE_DIR"
-COUNTER_FILE="${STATE_DIR}/${USERNAME}_counter.txt"
-LOCK_FILE="${STATE_DIR}/${USERNAME}_counter.lock"
-
-# Open the lock file and acquire an exclusive lock (blocks until available)
-exec 9>"$LOCK_FILE"
-flock -x 9
-
-if [ -f "$COUNTER_FILE" ]; then
-    REQ_ID=$(cat "$COUNTER_FILE")
-    # Validate it is an integer, fallback to 0 if not
-    if [[ ! "$REQ_ID" =~ ^[0-9]+$ ]]; then
-        REQ_ID=0
-    fi
-    REQ_ID=$((REQ_ID + 1))
-else
-    REQ_ID=1
-fi
-echo "$REQ_ID" > "$COUNTER_FILE"
-
-# Release the lock and close file descriptor 9
-flock -u 9
-exec 9>&-
-
 # Build payload based on operation
 case "$OPERATION" in
     register)
-        # Payload: OP_REGISTER (1) | REQ_ID | USERNAME
-        build_payload 1 "$REQ_ID" "$USERNAME"
+        # Payload: OP_REGISTER (1) | USERNAME
+        build_payload 1 "$USERNAME"
         ;;
     borrow)
         if [ "$#" -lt 4 ]; then
@@ -69,8 +43,8 @@ case "$OPERATION" in
             exit 1
         fi
         BOOK_TITLE="$4"
-        # Payload: OP_BORROW (4) | REQ_ID | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        build_payload 4 "$REQ_ID" 0 "$USERNAME" "$BOOK_TITLE"
+        # Payload: OP_BORROW (4) | SENDER_USER (0) | USERNAME | BOOK_TITLE
+        build_payload 4 0 "$USERNAME" "$BOOK_TITLE"
         ;;
     return)
         if [ "$#" -lt 4 ]; then
@@ -78,8 +52,8 @@ case "$OPERATION" in
             exit 1
         fi
         BOOK_TITLE="$4"
-        # Payload: OP_RETURN (5) | REQ_ID | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        build_payload 5 "$REQ_ID" 0 "$USERNAME" "$BOOK_TITLE"
+        # Payload: OP_RETURN (5) | SENDER_USER (0) | USERNAME | BOOK_TITLE
+        build_payload 5 0 "$USERNAME" "$BOOK_TITLE"
         ;;
     search)
         if [ "$#" -lt 6 ] || [ "$4" != "--by" ]; then
@@ -97,8 +71,8 @@ case "$OPERATION" in
                 exit 1
                 ;;
         esac
-        # Payload: OP_SEARCH (2) | REQ_ID | SENDER_USER (0) | SEARCH_TYPE | SEARCH_TERM
-        build_payload 2 "$REQ_ID" 0 "$SEARCH_TYPE" "$SEARCH_TERM"
+        # Payload: OP_SEARCH (2) | SENDER_USER (0) | SEARCH_TYPE | SEARCH_TERM
+        build_payload 2 0 "$SEARCH_TYPE" "$SEARCH_TERM"
         ;;
     *)
         echo "Error: Unknown operation '$OPERATION'. Must be register, borrow, return, or search." >&2
@@ -116,34 +90,27 @@ if [ -z "$RESPONSE" ]; then
 fi
 
 # Parse response (split fields on ETX, stripping EOT)
-# Note: The response is formatted as RESP_OP \x03 REQ_ID \x03 RESULT_CODE \x03 \x04
-# Or for search: RESP_OP \x03 REQ_ID \x03 BOOK_COUNT \x03 BOOK_TITLE_1 \x03 ...
+# Note: The response is formatted as RESP_OP \x03 RESULT_CODE \x03 \x04
+# Or for search: RESP_OP \x03 BOOK_COUNT \x03 BOOK_TITLE_1 \x03 ...
 IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
 
 RESP_OP="${FIELDS[0]}"
-RESP_REQ_ID="${FIELDS[1]}"
-
-# Ensure response matches our request ID
-if [ "$RESP_REQ_ID" -ne "$REQ_ID" ]; then
-    echo "Error: Request ID mismatch. Expected $REQ_ID, got $RESP_REQ_ID." >&2
-    exit 1
-fi
 
 # Interpret search results (OP_SEARCH_RESULT = 3)
 if [ "$RESP_OP" -eq 3 ]; then
-    BOOK_COUNT="${FIELDS[2]}"
+    BOOK_COUNT="${FIELDS[1]}"
     if [ "$BOOK_COUNT" -eq 0 ]; then
         echo "No books found matching search criteria."
     else
         echo "Search results ($BOOK_COUNT book(s) found):"
-        for ((i=3; i<3+BOOK_COUNT; i++)); do
+        for ((i=2; i<2+BOOK_COUNT; i++)); do
             echo "- ${FIELDS[i]}"
         done
     fi
     exit 0
 fi
 
-RESULT_CODE="${FIELDS[2]}"
+RESULT_CODE="${FIELDS[1]}"
 
 # Handle the result code
 case "$RESULT_CODE" in

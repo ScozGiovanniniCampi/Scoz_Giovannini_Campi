@@ -5,12 +5,6 @@
 
 #include "utils/util.h"
 
-char* reqId_to_char(requestId reqId) {
-    static __thread char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%u", reqId);
-    return buffer;
-}
-
 char* resultCode_to_char(ResultCode result_code) {
     static __thread char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", result_code);
@@ -45,12 +39,6 @@ char* unsigned_int_to_char(unsigned int value) {
     static __thread char buffer[32];
     snprintf(buffer, sizeof(buffer), "%u", value);
     return buffer;
-}
-
-requestId char_to_reqId(const char* str) {
-    static __thread requestId reqId;
-    reqId = (requestId)strtoul(str, NULL, 10);
-    return reqId;
 }
 
 ResultCode char_to_resultCode(const char* str) {

@@ -17,64 +17,64 @@ static int is_counter_valid(OperationType op_code, int counter, char** args) {
     switch (op_code) {
         case OP_ANSWER:
         case OP_REGISTER:
-            return counter == 2;
+            return counter == 1;
         case OP_SEARCH:
         case OP_BORROW:
         case OP_RETURN:
-            return counter == 4;
+            return counter == 3;
         case OP_GET_USERS:
         case OP_GET_BOOKS:
-            return counter == 1;
+            return counter == 0;
         case OP_SEARCH_RESULT:
         case OP_USERS_RESULT:
         case OP_BOOKS_RESULT: {
-            if (counter < 2) {
+            if (counter < 1) {
                 return 0;
             }
-            int count = (int)strtol(args[1], NULL, 10);
-            return counter == 2 + count;
+            int count = (int)strtol(args[0], NULL, 10);
+            return counter == 1 + count;
         }
         default:
             return 1;
     }
 }
 
-static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, char** args) {
+static void dispatch_operation(int cfd, OperationType op_code, char** args) {
     switch (op_code) {
         case OP_ANSWER:
-            printf("[Library %u] Received answer: reqId=%u, result_code=%d\n", global_library_id, reqId, char_to_resultCode(args[1]));
+            printf("[Library %u] Received answer: result_code=%d\n", global_library_id, char_to_resultCode(args[0]));
             break;
         case OP_REGISTER:
-            handle_register(cfd, reqId, args[1]);
+            handle_register(cfd, args[0]);
             break;
         case OP_SEARCH:
-            handle_search(cfd, reqId, char_to_userType(args[1]), char_to_searchType(args[2]), args[3]);
+            handle_search(cfd, char_to_userType(args[0]), char_to_searchType(args[1]), args[2]);
             break;
         case OP_SEARCH_RESULT: {
-            int count = (int)strtol(args[1], NULL, 10);
-            printf("[Library %u] Received search result: reqId=%u, book_count=%d\n", global_library_id, reqId, count);
+            int count = (int)strtol(args[0], NULL, 10);
+            printf("[Library %u] Received search result: book_count=%d\n", global_library_id, count);
             break;
         }
         case OP_BORROW:
-            handle_borrow(cfd, reqId, char_to_userType(args[1]), args[2], args[3]);
+            handle_borrow(cfd, char_to_userType(args[0]), args[1], args[2]);
             break;
         case OP_RETURN:
-            handle_return(cfd, reqId, char_to_userType(args[1]), args[2], args[3]);
+            handle_return(cfd, char_to_userType(args[0]), args[1], args[2]);
             break;
         case OP_GET_USERS:
-            handle_get_users(cfd, reqId);
+            handle_get_users(cfd);
             break;
         case OP_USERS_RESULT: {
-            int count = (int)strtol(args[1], NULL, 10);
-            printf("[Library %u] Received users result: reqId=%u, user_count=%d\n", global_library_id, reqId, count);
+            int count = (int)strtol(args[0], NULL, 10);
+            printf("[Library %u] Received users result: user_count=%d\n", global_library_id, count);
             break;
         }
         case OP_GET_BOOKS:
-            handle_get_books(cfd, reqId);
+            handle_get_books(cfd);
             break;
         case OP_BOOKS_RESULT: {
-            int count = (int)strtol(args[1], NULL, 10);
-            printf("[Library %u] Received books result: reqId=%u, book_count=%d\n", global_library_id, reqId, count);
+            int count = (int)strtol(args[0], NULL, 10);
+            printf("[Library %u] Received books result: book_count=%d\n", global_library_id, count);
             break;
         }
         default:
@@ -90,18 +90,17 @@ void* pthread_run(void* arg) {
     size_t* sizes = NULL;
     int counter = 0;
     OperationType op_code = fetch_arguments(cfd, &args, &sizes, &counter);
-    if (args == NULL || counter < 1) {
+    if (args == NULL || counter < 0) {
         free((void*)args);
         free(sizes);
         close(cfd);
         return NULL;
     }
-    requestId reqId = char_to_reqId(args[0]);
 
     sleep((rand() % 5) + 1);
 
     if (is_counter_valid(op_code, counter, args)) {
-        dispatch_operation(cfd, reqId, op_code, args);
+        dispatch_operation(cfd, op_code, args);
     }
 
     // Skip the END_OF_TRANSMISSION character for the next read
