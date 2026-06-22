@@ -371,12 +371,79 @@ static ResultCode borrow_from_remote_libraries(requestId reqId, const char* book
     return ERROR_BOOK_NOT_FOUND;  // Indicate book not found in any library
 }
 
+static ResultCode check_user_can_borrow(const char* username) {
+    ResultCode code = ERROR_USER_NOT_REGISTERED;
+    pthread_mutex_lock(&global_user_vector.mutex);
+    for (size_t i = 0; i < global_user_vector.size; ++i) {
+        if (strcmp(global_user_vector.data[i].name, username) == 0) {
+            if (global_user_vector.data[i].hasBorrowedBook) {
+                code = ERROR_USER_ALREADY_BORROWED_BOOK;
+            } else {
+                code = RESULT_SUCCESS;
+            }
+            break;
+        }
+    }
+    pthread_mutex_unlock(&global_user_vector.mutex);
+    return code;
+}
+
+static void set_user_borrow_status(const char* username, bool status) {
+    pthread_mutex_lock(&global_user_vector.mutex);
+    for (size_t i = 0; i < global_user_vector.size; ++i) {
+        if (strcmp(global_user_vector.data[i].name, username) == 0) {
+            global_user_vector.data[i].hasBorrowedBook = status;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&global_user_vector.mutex);
+}
+
+static ResultCode return_to_remote_libraries(requestId reqId, const char* book_title) {
+    for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
+        if (i == global_library_id) {
+            continue;
+        }
+
+        int peer_fd = socket_connect_to_server((int)i);
+        if (peer_fd < 0) {
+            continue;
+        }
+
+        send_argument(peer_fd, operationType_to_char(OP_RETURN));
+        send_argument(peer_fd, reqId_to_char(reqId));
+        send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+        send_argument(peer_fd, size_t_to_char((size_t)global_library_id));
+        send_argument(peer_fd, book_title);
+        write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
+
+        ResultCode resCode = get_borrow_response(peer_fd, reqId, (int)i, book_title);
+        close(peer_fd);
+
+        if (resCode == RESULT_SUCCESS) {
+            return RESULT_SUCCESS;
+        }
+    }
+    return RESULT_FAILURE;
+}
+
 // TODO: check for who borrowed the book
 void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
-    bool book_found = false;
     ResultCode res_code = RESULT_SUCCESS;
+    bool book_found_and_available = false;
+
+    if (sender_type == SENDER_USER) {
+        res_code = check_user_can_borrow(sender_id);
+        if (res_code != RESULT_SUCCESS) {
+            send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+            send_argument(socket_fd, reqId_to_char(reqId));
+            send_argument(socket_fd, resultCode_to_char(res_code));
+            write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
+            return;
+        }
+    }
 
     pthread_mutex_lock(&global_book_vector.mutex);
     for (size_t i = 0; i < global_book_vector.size; ++i) {
@@ -385,30 +452,42 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
             if (book->status == AVAILABLE) {
                 book->status = BORROWED;
                 res_code = RESULT_SUCCESS;
+                book_found_and_available = true;
             } else {
                 res_code = ERROR_BOOK_ALREADY_BORROWED;
             }
-            book_found = true;
             break;
         }
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
-    send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
-    send_argument(socket_fd, reqId_to_char(reqId));              // reqId
-
-    if (book_found) {
-        send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
-    } else if (sender_type == SENDER_USER) {
+    if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED && sender_type == SENDER_USER) {
         int library_id = -1;
         res_code = borrow_from_remote_libraries(reqId, book_title, &library_id);
-        send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
-
-    } else {
-        send_argument(socket_fd, resultCode_to_char(ERROR_BOOK_NOT_FOUND));  // Result code
+        if (res_code == RESULT_SUCCESS) {
+            book_found_and_available = true;
+        }
+    } else if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED) {
+        res_code = ERROR_BOOK_NOT_FOUND;
     }
 
-    write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
+    if (book_found_and_available && sender_type == SENDER_USER) {
+        BorrowedBook record;
+        memset(&record, 0, sizeof(record));
+        strncpy(record.book.title, book_title, MAX_TITLE_LENGTH - 1);
+        strncpy(record.borrowerId, sender_id, MAX_BORROWER_LENGTH - 1);
+
+        pthread_mutex_lock(&global_borrowed_book_vector.mutex);
+        add_book_to_vector(&global_borrowed_book_vector, &record);
+        pthread_mutex_unlock(&global_borrowed_book_vector.mutex);
+
+        set_user_borrow_status(sender_id, true);
+    }
+
+    send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+    send_argument(socket_fd, reqId_to_char(reqId));
+    send_argument(socket_fd, resultCode_to_char(res_code));
+    write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
 }
 
 // TODO: check for who borrowed the book
@@ -416,65 +495,93 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
 void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling return request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
 
-    send_argument(socket_fd, operationType_to_char(OP_ANSWER));  // Operation type
-    send_argument(socket_fd, reqId_to_char(reqId));              // reqId
-
-    bool book_found = false;
     ResultCode res_code = RESULT_FAILURE;
+    bool belongs_to_us = false;
 
     pthread_mutex_lock(&global_book_vector.mutex);
     for (size_t i = 0; i < global_book_vector.size; ++i) {
         Book* book = &global_book_vector.data[i];
         if (strcmp(book->title, book_title) == 0) {
+            belongs_to_us = true;
             if (book->status == BORROWED) {
                 book->status = AVAILABLE;
                 res_code = RESULT_SUCCESS;
-            } else {
-                res_code = RESULT_FAILURE;
             }
-            book_found = true;
             break;
         }
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
-    if (book_found) {
-        send_argument(socket_fd, resultCode_to_char(res_code));  // Result code
-    } else {
-        send_argument(socket_fd, resultCode_to_char(RESULT_FAILURE));  // Result code
+    if (!belongs_to_us && sender_type == SENDER_USER) {
+        res_code = return_to_remote_libraries(reqId, book_title);
     }
 
-    char eot = END_OF_TRANSMISSION;
-    write(socket_fd, &eot, 1);  // Signal end of transmission
+    if (res_code == RESULT_SUCCESS && sender_type == SENDER_USER) {
+        pthread_mutex_lock(&global_borrowed_book_vector.mutex);
+        for (size_t i = 0; i < global_borrowed_book_vector.size; ++i) {
+            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 && strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
+                BorrowedBook* removed = remove_book_from_vector_borrowed(&global_borrowed_book_vector, i);
+                free(removed);
+                break;
+            }
+        }
+        pthread_mutex_unlock(&global_borrowed_book_vector.mutex);
+
+        set_user_borrow_status(sender_id, false);
+    }
+
+    send_argument(socket_fd, operationType_to_char(OP_ANSWER));
+    send_argument(socket_fd, reqId_to_char(reqId));
+    send_argument(socket_fd, resultCode_to_char(res_code));
+    write(socket_fd, &(char){END_OF_TRANSMISSION}, 1);
 }
 
 void handle_get_users(int socket_fd, requestId reqId) {
     printf("[Library %u] Handling get users request: reqId=%d\n", global_library_id, reqId);
 
-    send_argument(socket_fd, operationType_to_char(OP_USERS_RESULT));  // Operation type
-    send_argument(socket_fd, reqId_to_char(reqId));                    // reqId
+    send_argument(socket_fd, operationType_to_char(OP_USERS_RESULT));
+    send_argument(socket_fd, reqId_to_char(reqId));
 
     pthread_mutex_lock(&global_user_vector.mutex);
+    pthread_mutex_lock(&global_borrowed_book_vector.mutex);
+
     size_t count = global_user_vector.size;
-    char (*temp_users)[MAX_USER_LENGTH] = NULL;
+    char** temp_users = NULL;
+    char** temp_books = NULL;
+
     if (count > 0) {
-        temp_users = malloc(count * sizeof(*temp_users));
-        if (temp_users) {
-            for (size_t i = 0; i < count; ++i) {
-                strlcpy(temp_users[i], global_user_vector.data[i].name, sizeof(temp_users[i]));
+        temp_users = (char**)malloc(count * sizeof(char*));
+        temp_books = (char**)malloc(count * sizeof(char*));
+        for (size_t i = 0; i < count; ++i) {
+            temp_users[i] = strdup(global_user_vector.data[i].name);
+            temp_books[i] = strdup("None");
+
+            if (global_user_vector.data[i].hasBorrowedBook) {
+                for (size_t j = 0; j < global_borrowed_book_vector.size; ++j) {
+                    if (strcmp(global_borrowed_book_vector.data[j].borrowerId, temp_users[i]) == 0) {
+                        free(temp_books[i]);
+                        temp_books[i] = strdup(global_borrowed_book_vector.data[j].book.title);
+                        break;
+                    }
+                }
             }
         }
     }
+
+    pthread_mutex_unlock(&global_borrowed_book_vector.mutex);
     pthread_mutex_unlock(&global_user_vector.mutex);
 
-    if (count > 0 && !temp_users) {
-        send_argument(socket_fd, size_t_to_char(0));
-    } else {
-        send_argument(socket_fd, size_t_to_char(count));
+    send_argument(socket_fd, size_t_to_char(count));
+
+    if (count > 0) {
         for (size_t i = 0; i < count; ++i) {
             send_argument(socket_fd, temp_users[i]);
+            send_argument(socket_fd, temp_books[i]);
+            free(temp_users[i]);
+            free(temp_books[i]);
         }
-        free(temp_users);
+        free((void*)temp_users);
+        free((void*)temp_books);
     }
 
     char eot = END_OF_TRANSMISSION;
@@ -484,24 +591,40 @@ void handle_get_users(int socket_fd, requestId reqId) {
 void handle_get_books(int socket_fd, requestId reqId) {
     printf("[Library %u] Handling get books request: reqId=%d\n", global_library_id, reqId);
 
+    send_argument(socket_fd, operationType_to_char(OP_BOOKS_RESULT));
+    send_argument(socket_fd, reqId_to_char(reqId));
+
     pthread_mutex_lock(&global_book_vector.mutex);
     size_t count = global_book_vector.size;
-    const char** temp_titles = NULL;
+
+    char** temp_titles = NULL;
+    char** temp_statuses = NULL;
+
     if (count > 0) {
-        temp_titles = (const char**)malloc(count * sizeof(char*));
-        if (temp_titles) {
-            for (size_t i = 0; i < count; ++i) {
-                temp_titles[i] = global_book_vector.data[i].title;
+        temp_titles = (char**)malloc(count * sizeof(char*));
+        temp_statuses = (char**)malloc(count * sizeof(char*));
+        for (size_t i = 0; i < count; ++i) {
+            temp_titles[i] = strdup(global_book_vector.data[i].title);
+            if (global_book_vector.data[i].status == AVAILABLE) {
+                temp_statuses[i] = strdup("AVAILABLE");
+            } else {
+                temp_statuses[i] = strdup("BORROWED");
             }
         }
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
-    if (temp_titles) {
+    send_argument(socket_fd, size_t_to_char(count));
+
+    if (count > 0) {
         for (size_t i = 0; i < count; ++i) {
             send_argument(socket_fd, temp_titles[i]);
+            send_argument(socket_fd, temp_statuses[i]);
+            free(temp_titles[i]);
+            free(temp_statuses[i]);
         }
         free((void*)temp_titles);
+        free((void*)temp_statuses);
     }
 
     char eot = END_OF_TRANSMISSION;
