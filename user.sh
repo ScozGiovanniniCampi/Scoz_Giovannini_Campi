@@ -21,7 +21,31 @@ if [ ! -S "$SOCKET_PATH" ]; then
     exit 1
 fi
 
-# Delimiters
+# Constants (operation codes, search types, result codes, timeouts)
+OP_REGISTER=1
+OP_SEARCH=2
+OP_SEARCH_RESULT=3
+OP_BORROW=4
+OP_RETURN=5
+SENDER_USER=0
+
+SEARCH_BY_TITLE=0
+SEARCH_BY_AUTHOR=1
+SEARCH_BY_YEAR=2
+
+RESULT_SUCCESS=0
+RESULT_FAILURE=1
+RESULT_NOT_REGISTERED=2
+RESULT_BOOK_NOT_FOUND=3
+RESULT_ALREADY_BORROWED=4
+RESULT_USER_ALREADY_REGISTERED=5
+RESULT_USER_ALREADY_BORROWED=6
+RESULT_BOOK_NOT_BORROWED=7
+RESULT_NOT_BORROWED_BY_USER=8
+RESULT_NO_BORROWED_BOOKS=9
+
+NC_TIMEOUT=11
+
 ETX=$'\x03' # End of Text (Argument delimiter)
 EOT=$'\x04' # End of Transmission
 
@@ -34,8 +58,8 @@ build_payload() {
 # Build payload based on operation
 case "$OPERATION" in
     register)
-        # Payload: OP_REGISTER (1) | USERNAME
-        build_payload 1 "$USERNAME"
+        # Payload: OP_REGISTER | USERNAME
+        build_payload "$OP_REGISTER" "$USERNAME"
         ;;
     borrow)
         if [ "$#" -lt 4 ]; then
@@ -43,8 +67,8 @@ case "$OPERATION" in
             exit 1
         fi
         BOOK_TITLE="$4"
-        # Payload: OP_BORROW (4) | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        build_payload 4 0 "$USERNAME" "$BOOK_TITLE"
+        # Payload: OP_BORROW | SENDER_USER | USERNAME | BOOK_TITLE
+        build_payload "$OP_BORROW" "$SENDER_USER" "$USERNAME" "$BOOK_TITLE"
         ;;
     return)
         if [ "$#" -lt 4 ]; then
@@ -52,8 +76,8 @@ case "$OPERATION" in
             exit 1
         fi
         BOOK_TITLE="$4"
-        # Payload: OP_RETURN (5) | SENDER_USER (0) | USERNAME | BOOK_TITLE
-        build_payload 5 0 "$USERNAME" "$BOOK_TITLE"
+        # Payload: OP_RETURN | SENDER_USER | USERNAME | BOOK_TITLE
+        build_payload "$OP_RETURN" "$SENDER_USER" "$USERNAME" "$BOOK_TITLE"
         ;;
     search)
         if [ "$#" -lt 6 ] || [ "$4" != "--by" ]; then
@@ -71,8 +95,8 @@ case "$OPERATION" in
                 exit 1
                 ;;
         esac
-        # Payload: OP_SEARCH (2) | SENDER_USER (0) | SEARCH_TYPE | SEARCH_TERM
-        build_payload 2 0 "$SEARCH_TYPE" "$SEARCH_TERM"
+        # Payload: OP_SEARCH | SENDER_USER | SEARCH_TYPE | SEARCH_TERM
+        build_payload "$OP_SEARCH" "$SENDER_USER" "$SEARCH_TYPE" "$SEARCH_TERM"
         ;;
     *)
         echo "Error: Unknown operation '$OPERATION'. Must be register, borrow, return, or search." >&2
@@ -80,8 +104,8 @@ case "$OPERATION" in
         ;;
 esac
 
-# Send payload to library process and capture response (waits max 11 seconds: 1-5 random wait for library + 1-5 random wait for other libraries + 1 second buffer)
-RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 11 -U "$SOCKET_PATH" 2>/dev/null || true)
+# Send payload to library process and capture response (waits max ${NC_TIMEOUT} seconds)
+RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w "$NC_TIMEOUT" -U "$SOCKET_PATH" 2>/dev/null || true)
 
 if [ -z "$RESPONSE" ]; then
     echo "Error: No response from the library process at '${SOCKET_PATH}'." >&2
@@ -95,8 +119,8 @@ IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
 
 RESP_OP="${FIELDS[0]}"
 
-# Interpret search results (OP_SEARCH_RESULT = 3)
-if [ "$RESP_OP" -eq 3 ]; then
+# Interpret search results (OP_SEARCH_RESULT)
+if [ "$RESP_OP" -eq "$OP_SEARCH_RESULT" ]; then
     BOOK_COUNT="${FIELDS[1]}"
     if [ "$BOOK_COUNT" -eq 0 ]; then
         echo "No books found matching search criteria."
@@ -113,43 +137,43 @@ RESULT_CODE="${FIELDS[1]}"
 
 # Handle the result code
 case "$RESULT_CODE" in
-    0)
+    "$RESULT_SUCCESS")
         echo "Success: '$OPERATION' completed successfully."
         exit 0
         ;;
-    1)
+    "$RESULT_FAILURE")
         echo "Error: '$OPERATION' failed." >&2
         exit 1
         ;;
-    2)
+    "$RESULT_NOT_REGISTERED")
         echo "Error: User '$USERNAME' is not registered with this library." >&2
         exit 1
         ;;
-    3)
+    "$RESULT_BOOK_NOT_FOUND")
         echo "Error: Book not found." >&2
         exit 1
         ;;
-    4)
+    "$RESULT_ALREADY_BORROWED")
         echo "Error: Book is already borrowed." >&2
         exit 1
         ;;
-    5)
+    "$RESULT_USER_ALREADY_REGISTERED")
         echo "Error: User '$USERNAME' is already registered." >&2
         exit 1
         ;;
-    6)
+    "$RESULT_USER_ALREADY_BORROWED")
         echo "Error: User '$USERNAME' has already borrowed a book." >&2
         exit 1
         ;;
-    7)
+    "$RESULT_BOOK_NOT_BORROWED")
         echo "Error: Book is not borrowed." >&2
         exit 1
         ;;
-    8)
+    "$RESULT_NOT_BORROWED_BY_USER")
         echo "Error: Book is not borrowed by user '$USERNAME'." >&2
         exit 1
         ;;
-    9)
+    "$RESULT_NO_BORROWED_BOOKS")
         echo "Error: User '$USERNAME' has no borrowed books." >&2
         exit 1
         ;;
