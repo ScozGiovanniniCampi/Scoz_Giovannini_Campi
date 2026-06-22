@@ -421,7 +421,6 @@ static ResultCode return_to_specific_library(const char* book_title, int target_
     return resCode;
 }
 
-// TODO: check for who borrowed the book
 void handle_borrow(int socket_fd, UserType user_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling borrow request: user_type=%d, sender_id=%s, book_title=%s\n", global_library_id, user_type, sender_id, book_title);
 

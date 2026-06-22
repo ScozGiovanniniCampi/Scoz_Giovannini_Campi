@@ -32,8 +32,7 @@ int socket_init_server(LibrarySocket* sock, int library_id) {
         return -3;
     }
 
-    // TODO: check if we need to increase the backlog size for listen
-    if (listen(sock->fd, 5) < 0) {
+    if (listen(sock->fd, 128) < 0) {
         perror("listen");
         close(sock->fd);
         return -4;

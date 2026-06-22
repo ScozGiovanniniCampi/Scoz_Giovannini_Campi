@@ -29,7 +29,6 @@ typedef enum {
     USER_MANAGER,
 } UserType;
 
-// TODO: Add more error codes as needed
 typedef enum {
     RESULT_SUCCESS = 0,
     RESULT_FAILURE = 1,
