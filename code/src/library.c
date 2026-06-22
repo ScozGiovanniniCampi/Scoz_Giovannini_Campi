@@ -90,7 +90,7 @@ void* pthread_run(void* arg) {
     size_t* sizes = NULL;
     int counter = 0;
     OperationType op_code = fetch_arguments(cfd, &args, &sizes, &counter);
-    if (args == NULL || counter < 0) {
+    if (op_code == OP_ERROR || counter < 0 || (counter > 0 && args == NULL)) {
         free((void*)args);
         free(sizes);
         close(cfd);
