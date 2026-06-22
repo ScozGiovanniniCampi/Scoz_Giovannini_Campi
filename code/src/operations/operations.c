@@ -415,34 +415,22 @@ static void set_user_borrow_status(const char* username, bool status) {
     pthread_mutex_unlock(&global_user_vector.mutex);
 }
 
-static ResultCode return_to_remote_libraries(requestId reqId, const char* book_title) {
-    ResultCode final_res = ERROR_BOOK_NOT_FOUND;
-    for (unsigned int i = 0; i < global_num_total_libraries; ++i) {
-        if (i == global_library_id) {
-            continue;
-        }
-
-        int peer_fd = socket_connect_to_server((int)i);
-        if (peer_fd < 0) {
-            continue;
-        }
-
-        send_argument(peer_fd, operationType_to_char(OP_RETURN));
-        send_argument(peer_fd, reqId_to_char(reqId));
-        send_argument(peer_fd, userType_to_char(USER_LIBRARY));
-        send_argument(peer_fd, size_t_to_char((size_t)global_library_id));
-        send_argument(peer_fd, book_title);
-        write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
-
-        ResultCode resCode = get_borrow_response(peer_fd, reqId, (int)i, book_title);
-        close(peer_fd);
-
-        if (resCode == RESULT_SUCCESS) {
-            return RESULT_SUCCESS;
-        }
-        final_res = resCode;
+static ResultCode return_to_specific_library(requestId reqId, const char* book_title, int target_library_id) {
+    int peer_fd = socket_connect_to_server(target_library_id);
+    if (peer_fd < 0) {
+        return ERROR_BOOK_NOT_FOUND;
     }
-    return final_res;
+
+    send_argument(peer_fd, operationType_to_char(OP_RETURN));
+    send_argument(peer_fd, reqId_to_char(reqId));
+    send_argument(peer_fd, userType_to_char(USER_LIBRARY));
+    send_argument(peer_fd, size_t_to_char((size_t)global_library_id));
+    send_argument(peer_fd, book_title);
+    write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
+
+    ResultCode resCode = get_borrow_response(peer_fd, reqId, target_library_id, book_title);
+    close(peer_fd);
+    return resCode;
 }
 
 // TODO: check for who borrowed the book
@@ -479,11 +467,13 @@ void handle_borrow(int socket_fd, requestId reqId, UserType user_type, const cha
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
+    int owner_lib_id = (int)global_library_id;
     if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED && user_type == USER_USER) {
         int library_id = -1;
         res_code = borrow_from_remote_libraries(reqId, book_title, &library_id);
         if (res_code == RESULT_SUCCESS) {
             book_found_and_available = true;
+            owner_lib_id = library_id;
         }
     } else if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED) {
         res_code = ERROR_BOOK_NOT_FOUND;
@@ -495,6 +485,7 @@ void handle_borrow(int socket_fd, requestId reqId, UserType user_type, const cha
         strncpy(record.book.title, book_title, MAX_TITLE_LENGTH - 1);
         strncpy(record.borrowerId, sender_id, MAX_BORROWER_LENGTH - 1);
         record.borrowerType = user_type;
+        record.ownerLibraryId = owner_lib_id;
 
         pthread_mutex_lock(&global_borrowed_book_vector.mutex);
         add_book_to_vector(&global_borrowed_book_vector, &record);
@@ -516,6 +507,7 @@ void handle_return(int socket_fd, requestId reqId, UserType user_type, const cha
 
     ResultCode res_code = RESULT_FAILURE;
     bool belongs_to_us = false;
+    int target_library_id = -1;
 
     if (user_type == USER_USER) {
         // 1. Check if user is registered and has borrowed a book
@@ -555,6 +547,7 @@ void handle_return(int socket_fd, requestId reqId, UserType user_type, const cha
                 global_borrowed_book_vector.data[i].borrowerType == user_type &&
                 strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
                 borrowed_this_book = true;
+                target_library_id = global_borrowed_book_vector.data[i].ownerLibraryId;
                 break;
             }
         }
@@ -586,7 +579,11 @@ void handle_return(int socket_fd, requestId reqId, UserType user_type, const cha
     pthread_mutex_unlock(&global_book_vector.mutex);
 
     if (!belongs_to_us && user_type == USER_USER) {
-        res_code = return_to_remote_libraries(reqId, book_title);
+        if (target_library_id != -1) {
+            res_code = return_to_specific_library(reqId, book_title, target_library_id);
+        } else {
+            res_code = ERROR_BOOK_NOT_FOUND;
+        }
     } else if (!belongs_to_us && user_type == USER_LIBRARY) {
         res_code = ERROR_BOOK_NOT_FOUND;
     }

@@ -23,6 +23,7 @@ typedef struct BorrowedBook {
     Book book;
     char borrowerId[MAX_BORROWER_LENGTH];
     UserType borrowerType;
+    int ownerLibraryId;
 } BorrowedBook;
 
 typedef struct {
