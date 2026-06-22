@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include "models/book.h"
@@ -84,22 +85,22 @@ static bool title_matches(SearchType search_type, const char* search_term, const
             if (has_wildcards(search_term)) {
                 return match_wildcard(search_term, book->title);
             }
-            return (search_term[0] == '\0' || strcmp(book->title, search_term) == 0) != 0;
+            return (search_term[0] == '\0' || strcasecmp(book->title, search_term) == 0) != 0;
         case SEARCH_BY_AUTHOR:
             if (has_wildcards(search_term)) {
                 return match_wildcard(search_term, book->author);
             }
-            return (search_term[0] == '\0' || strcmp(book->author, search_term) == 0) != 0;
+            return (search_term[0] == '\0' || strcasecmp(book->author, search_term) == 0) != 0;
         case SEARCH_BY_YEAR: {
             if (has_wildcards(search_term)) {
                 char year_str[12];
                 snprintf(year_str, sizeof(year_str), "%d", book->publicationYear);
                 return match_wildcard(search_term, year_str);
-            } else {
-                char* endptr = NULL;
-                long year = strtol(search_term, &endptr, 10);
-                return (endptr && *endptr == '\0' && book->publicationYear == (int)year) != 0;
             }
+
+            char* endptr = NULL;
+            long year = strtol(search_term, &endptr, 10);
+            return (endptr && *endptr == '\0' && book->publicationYear == (int)year) != 0;
         }
         default:
             return false;
