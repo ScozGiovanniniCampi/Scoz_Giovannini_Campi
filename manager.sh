@@ -60,7 +60,7 @@ case "$OPERATION" in
         echo "BOOKS LIST:"
         ;;
     list_users)
-        build_payload 9 #OP_CODE=9 for list_users
+        build_payload 6 #OP_CODE=6 for list_users
         echo "USERS LIST:"
         ;;
     *)
@@ -79,16 +79,30 @@ for (( i=0; i<LIBRARY_COUNT; i++ )); do
     else
         IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
         RESP_OP="${FIELDS[0]}"
-        if [ "$RESP_OP" -ne 8 ] && [ "$RESP_OP" -ne 9 ]; then
+        if [ "$RESP_OP" -ne 7 ] && [ "$RESP_OP" -ne 9 ]; then
             echo "Error: Unexpected response from library process ${i}." >&2
             continue
         fi
         COUNT="${FIELDS[1]}"
         if [ "$COUNT" -ne 0 ]; then
             echo "From library process ${i}:"
-            for ((j=2; j<2+COUNT; j+=2)); do
-                echo "- ${FIELDS[j]} [${FIELDS[j+1]}]"
+            for ((j=2; j<2+COUNT*2; j+=2)); do
+                if [ "$RESP_OP" -eq 9 ]; then
+                    echo "- ${FIELDS[j]} [${FIELDS[j+1]}]"
+                fi
+                if [ "$RESP_OP" -eq 7 ]; then
+                    if [ "${FIELDS[j+1]}" = "None" ]; then
+                        echo "- ${FIELDS[j]}"
+                    else
+                        echo "- ${FIELDS[j]} [${FIELDS[j+1]}]"
+                    fi
+                fi
             done
+        fi
+        if [[ "$COUNT" -eq 0 && "$RESP_OP" -eq 9 ]]; then
+            echo "No books found in library process ${i}."
+        elif [[ "$COUNT" -eq 0 && "$RESP_OP" -eq 7 ]]; then
+            echo "No users found in library process ${i}."
         fi
     fi
 done
