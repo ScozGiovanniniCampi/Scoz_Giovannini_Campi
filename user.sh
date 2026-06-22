@@ -87,9 +87,9 @@ case "$OPERATION" in
         SEARCH_BY="$5"
         SEARCH_TERM="$6"
         case "$SEARCH_BY" in
-            title)  SEARCH_TYPE=0 ;;
-            author) SEARCH_TYPE=1 ;;
-            year)   SEARCH_TYPE=2 ;;
+            title)  SEARCH_TYPE="$SEARCH_BY_TITLE" ;;
+            author) SEARCH_TYPE="$SEARCH_BY_AUTHOR" ;;
+            year)   SEARCH_TYPE="$SEARCH_BY_YEAR" ;;
             *)
                 echo "Error: Invalid search type '$SEARCH_BY'. Must be title, author, or year." >&2
                 exit 1

@@ -31,6 +31,14 @@ for (( i=0; i<LIBRARY_COUNT; i++ )); do
     SOCKET_PATHS+=("/tmp/lib_${i}.sock")
 done
 
+# Constants (operation codes, response codes, timeout)
+OP_LIST_USERS=6
+OP_LIST_BOOKS=8
+RESP_USERS=7
+RESP_BOOKS=9
+NC_TIMEOUT=6
+
+
 # Delimiters
 ETX=$'\x03' # End of Text (Argument delimiter)
 EOT=$'\x04' # End of Transmission
@@ -56,11 +64,11 @@ case "$OPERATION" in
         exit 0
         ;;
     list_books)
-        build_payload 8 #OP_CODE=8 for list_books
+        build_payload "$OP_LIST_BOOKS" #OP_CODE for list_books
         echo "BOOKS LIST:"
         ;;
     list_users)
-        build_payload 6 #OP_CODE=6 for list_users
+        build_payload "$OP_LIST_USERS" #OP_CODE for list_users
         echo "USERS LIST:"
         ;;
     *)
@@ -70,16 +78,16 @@ case "$OPERATION" in
 esac
 
 
-# Send payload to every library socket and capture responses (waits max 6 seconds each)
+# Send payload to every library socket and capture responses (waits max ${NC_TIMEOUT} seconds each)
 for (( i=0; i<LIBRARY_COUNT; i++ )); do
     SOCKET_PATH="${SOCKET_PATHS[i]}"
-    RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w 6 -U "$SOCKET_PATH" 2>/dev/null || true)
+    RESPONSE=$(printf "%s" "$PAYLOAD" | nc -N -w "$NC_TIMEOUT" -U "$SOCKET_PATH" 2>/dev/null || true)
     if [ -z "$RESPONSE" ]; then
         echo "Error: No response from library process ${i}." >&2
     else
         IFS="$ETX" read -d "$EOT" -r -a FIELDS <<< "$RESPONSE"
         RESP_OP="${FIELDS[0]}"
-        if [ "$RESP_OP" -ne 7 ] && [ "$RESP_OP" -ne 9 ]; then
+        if [ "$RESP_OP" -ne "$RESP_USERS" ] && [ "$RESP_OP" -ne "$RESP_BOOKS" ]; then
             echo "Error: Unexpected response from library process ${i}." >&2
             continue
         fi
@@ -87,10 +95,10 @@ for (( i=0; i<LIBRARY_COUNT; i++ )); do
         if [ "$COUNT" -ne 0 ]; then
             echo "From library process ${i}:"
             for ((j=2; j<2+COUNT*2; j+=2)); do
-                if [ "$RESP_OP" -eq 9 ]; then
+                if [ "$RESP_OP" -eq "$RESP_BOOKS" ]; then
                     echo "- ${FIELDS[j]} [${FIELDS[j+1]}]"
                 fi
-                if [ "$RESP_OP" -eq 7 ]; then
+                if [ "$RESP_OP" -eq "$RESP_USERS" ]; then
                     if [ "${FIELDS[j+1]}" = "None" ]; then
                         echo "- ${FIELDS[j]}"
                     else
@@ -99,9 +107,9 @@ for (( i=0; i<LIBRARY_COUNT; i++ )); do
                 fi
             done
         fi
-        if [[ "$COUNT" -eq 0 && "$RESP_OP" -eq 9 ]]; then
+        if [[ "$COUNT" -eq 0 && "$RESP_OP" -eq "$RESP_BOOKS" ]]; then
             echo "No books found in library process ${i}."
-        elif [[ "$COUNT" -eq 0 && "$RESP_OP" -eq 7 ]]; then
+        elif [[ "$COUNT" -eq 0 && "$RESP_OP" -eq "$RESP_USERS" ]]; then
             echo "No users found in library process ${i}."
         fi
     fi
