@@ -41,7 +41,13 @@ Book* remove_book_from_vector_normal(BookVector* vector, size_t index) {
 }
 
 void free_book_vector_normal(BookVector* vector) {
-    free(vector->data);
+    if (vector->data) {
+        for (size_t i = 0; i < vector->size; ++i) {
+            free(vector->data[i].title);
+            free(vector->data[i].author);
+        }
+        free(vector->data);
+    }
     vector->data = NULL;
     vector->size = 0;
     vector->capacity = 0;
@@ -81,7 +87,14 @@ BorrowedBook* remove_book_from_vector_borrowed(BorrowedBookVector* vector, size_
 }
 
 void free_borrowed_book_vector(BorrowedBookVector* vector) {
-    free(vector->data);
+    if (vector->data) {
+        for (size_t i = 0; i < vector->size; ++i) {
+            free(vector->data[i].book.title);
+            free(vector->data[i].book.author);
+            free(vector->data[i].borrowerId);
+        }
+        free(vector->data);
+    }
     vector->data = NULL;
     vector->size = 0;
     vector->capacity = 0;
@@ -123,7 +136,12 @@ RegisteredUser* remove_user_from_vector(size_t index) {
 }
 
 void free_user_vector() {
-    free(global_user_vector.data);
+    if (global_user_vector.data) {
+        for (size_t i = 0; i < global_user_vector.size; ++i) {
+            free(global_user_vector.data[i].name);
+        }
+        free(global_user_vector.data);
+    }
     global_user_vector.data = NULL;
     global_user_vector.size = 0;
     global_user_vector.capacity = 0;

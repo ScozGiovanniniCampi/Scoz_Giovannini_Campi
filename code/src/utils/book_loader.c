@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 static char* parse_quoted_field(char* src, char* dst, size_t dst_size) {
@@ -62,13 +63,15 @@ static void parse_field(char** field_ptr, char* dst, size_t dst_size) {
     *field_ptr = src;
 }
 
-static int parse_csv_line(char* line, char* title, size_t title_len, char* author, size_t author_len, int* year_out) {
+static int parse_csv_line(char* line, Book* book) {
+    char temp_title[512] = {0};
+    char temp_author[512] = {0};
     char* ptr = line;
     while (*ptr == ' ' || *ptr == '\t') {
         ptr++;
     }
-    parse_field(&ptr, title, title_len);
-    parse_field(&ptr, author, author_len);
+    parse_field(&ptr, temp_title, sizeof(temp_title));
+    parse_field(&ptr, temp_author, sizeof(temp_author));
     while (*ptr == ' ' || *ptr == '\t') {
         ptr++;
     }
@@ -80,7 +83,16 @@ static int parse_csv_line(char* line, char* title, size_t title_len, char* autho
     if (end == ptr) {
         return 0;
     }
-    *year_out = (int)year;
+    book->title = strdup(temp_title);
+    if (!book->title) {
+        return 0;
+    }
+    book->author = strdup(temp_author);
+    if (!book->author) {
+        free(book->title);
+        return 0;
+    }
+    book->publicationYear = (int)year;
     return 1;
 }
 
@@ -118,7 +130,7 @@ BookVector loadBooksFromFile(const char* filename) {
         }
 
         Book book;
-        if (!parse_csv_line(line, book.title, MAX_TITLE_LENGTH, book.author, MAX_AUTHOR_LENGTH, &book.publicationYear)) {
+        if (!parse_csv_line(line, &book)) {
             continue;
         }
         book.status = AVAILABLE;

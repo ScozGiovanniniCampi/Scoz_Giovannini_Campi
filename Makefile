@@ -65,8 +65,8 @@ lint:
 # Remove compiled artifacts and the executable.
 clean:
 	rm -rf $(BUILD_DIR)
-	clean-sockets
-	clean-user-state
+	$(MAKE) clean-sockets
+	$(MAKE) clean-user-state
 
 # Remove any leftover socket files in /tmp.
 clean-sockets:

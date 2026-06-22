@@ -37,12 +37,15 @@ void handle_register(int socket_fd, const char* username) {
     } else {
         RegisteredUser user;
         memset(&user, 0, sizeof(user));
-        strncpy(user.name, username, MAX_USER_LENGTH - 1);
-        user.name[MAX_USER_LENGTH - 1] = '\0';
-        user.hasBorrowedBook = false;
-
-        if (!add_user_to_vector(&user)) {
+        user.name = strdup(username);
+        if (!user.name) {
             res_code = RESULT_FAILURE;
+        } else {
+            user.hasBorrowedBook = false;
+            if (!add_user_to_vector(&user)) {
+                free(user.name);
+                res_code = RESULT_FAILURE;
+            }
         }
     }
     pthread_mutex_unlock(&global_user_vector.mutex);
@@ -468,8 +471,8 @@ void handle_borrow(int socket_fd, UserType user_type, const char* sender_id, con
     if (book_found_and_available && user_type == USER_USER) {
         BorrowedBook record;
         memset(&record, 0, sizeof(record));
-        strncpy(record.book.title, book_title, MAX_TITLE_LENGTH - 1);
-        strncpy(record.borrowerId, sender_id, MAX_BORROWER_LENGTH - 1);
+        record.book.title = strdup(book_title);
+        record.borrowerId = strdup(sender_id);
         record.borrowerType = user_type;
         record.ownerLibraryId = owner_lib_id;
 
@@ -552,6 +555,8 @@ static void cleanup_borrow_record(const char* sender_id, UserType user_type, con
         if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 && global_borrowed_book_vector.data[i].borrowerType == user_type &&
             strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
             BorrowedBook* removed = remove_book_from_vector_borrowed(&global_borrowed_book_vector, i);
+            free(removed->book.title);
+            free(removed->borrowerId);
             free(removed);
             break;
         }
@@ -561,8 +566,6 @@ static void cleanup_borrow_record(const char* sender_id, UserType user_type, con
     set_user_borrow_status(sender_id, false);
 }
 
-// TODO: check for who borrowed the book
-// TODO: if borrowed from another library forward the return
 void handle_return(int socket_fd, UserType user_type, const char* sender_id, const char* book_title) {
     printf("[Library %u] Handling return request: user_type=%d, sender_id=%s, book_title=%s\n", global_library_id, user_type, sender_id, book_title);
 

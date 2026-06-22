@@ -4,10 +4,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define MAX_USER_LENGTH 50
-
 typedef struct RegisteredUser {
-    char name[MAX_USER_LENGTH];
+    char* name;
     bool hasBorrowedBook;
 } RegisteredUser;
 

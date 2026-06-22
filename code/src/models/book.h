@@ -5,23 +5,18 @@
 
 #include "../network/messages.h"
 
-#define MAX_TITLE_LENGTH 100
-#define MAX_AUTHOR_LENGTH 50
-#define MAX_BORROWER_LENGTH 50
-
 typedef enum { AVAILABLE, BORROWED, NOT_FOUND } BookStatus;
 
-// TODO: switch to heap save memory and avoid fixed size arrays for title and author
 typedef struct Book {
-    char title[MAX_TITLE_LENGTH];
-    char author[MAX_AUTHOR_LENGTH];
+    char* title;
+    char* author;
     int publicationYear;
     BookStatus status;
 } Book;
 
 typedef struct BorrowedBook {
     Book book;
-    char borrowerId[MAX_BORROWER_LENGTH];
+    char* borrowerId;
     UserType borrowerType;
     int ownerLibraryId;
 } BorrowedBook;
