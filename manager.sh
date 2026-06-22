@@ -14,9 +14,14 @@ fi
 OPERATION="$1"
 LIB_PATH="./build/library"
 
-RUNNING_LIBRARIES=$(pgrep -f "${LIB_PATH}" || true)
+RUNNING_LIBRARIES=$(pgrep -x "$(basename "${LIB_PATH}")" || true)
 if [ -z "$RUNNING_LIBRARIES" ]; then
-    LIBRARY_COUNT=0
+    if [ "$OPERATION" = "status" ]; then
+        echo "Running instances: 0"
+        exit 0
+    fi
+    echo "Error: No running library processes found." >&2
+    exit 1
 else
     LIBRARY_COUNT=$(printf '%s\n' "$RUNNING_LIBRARIES" | wc -l)
 fi
