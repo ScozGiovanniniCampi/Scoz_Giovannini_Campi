@@ -26,10 +26,10 @@ typedef enum {
 } SearchType;
 
 typedef enum {
-    SENDER_USER,
-    SENDER_LIBRARY,
-    SENDER_MANAGER,
-} SenderType;
+    USER_USER,
+    USER_LIBRARY,
+    USER_MANAGER,
+} UserType;
 
 // TODO: Add more error codes as needed
 typedef enum {
@@ -49,14 +49,14 @@ char* reqId_to_char(requestId reqId);
 char* resultCode_to_char(ResultCode result_code);
 char* operationType_to_char(OperationType op_type);
 char* searchType_to_char(SearchType search_type);
-char* senderType_to_char(SenderType sender_type);
+char* userType_to_char(UserType user_type);
 char* size_t_to_char(size_t value);
 char* unsigned_int_to_char(unsigned int value);
 requestId char_to_reqId(const char* str);
 ResultCode char_to_resultCode(const char* str);
 OperationType char_to_operationType(const char* str);
 SearchType char_to_searchType(const char* str);
-SenderType char_to_senderType(const char* str);
+UserType char_to_userType(const char* str);
 size_t char_to_size_t(const char* str);
 
 #define END_OF_ARGUMENT 3      // ASCII ETX (End of Text) character

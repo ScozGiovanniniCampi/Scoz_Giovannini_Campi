@@ -48,7 +48,7 @@ static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, 
             handle_register(cfd, reqId, args[1]);
             break;
         case OP_SEARCH:
-            handle_search(cfd, reqId, char_to_senderType(args[1]), char_to_searchType(args[2]), args[3]);
+            handle_search(cfd, reqId, char_to_userType(args[1]), char_to_searchType(args[2]), args[3]);
             break;
         case OP_SEARCH_RESULT: {
             int count = (int)strtol(args[1], NULL, 10);
@@ -56,10 +56,10 @@ static void dispatch_operation(int cfd, requestId reqId, OperationType op_code, 
             break;
         }
         case OP_BORROW:
-            handle_borrow(cfd, reqId, char_to_senderType(args[1]), args[2], args[3]);
+            handle_borrow(cfd, reqId, char_to_userType(args[1]), args[2], args[3]);
             break;
         case OP_RETURN:
-            handle_return(cfd, reqId, char_to_senderType(args[1]), args[2], args[3]);
+            handle_return(cfd, reqId, char_to_userType(args[1]), args[2], args[3]);
             break;
         case OP_GET_USERS:
             handle_get_users(cfd, reqId);

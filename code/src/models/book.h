@@ -3,6 +3,8 @@
 #include <pthread.h>
 #include <stddef.h>
 
+#include "../network/messages.h"
+
 #define MAX_TITLE_LENGTH 100
 #define MAX_AUTHOR_LENGTH 50
 #define MAX_BORROWER_LENGTH 50
@@ -20,6 +22,7 @@ typedef struct Book {
 typedef struct BorrowedBook {
     Book book;
     char borrowerId[MAX_BORROWER_LENGTH];
+    UserType borrowerType;
 } BorrowedBook;
 
 typedef struct {

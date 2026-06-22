@@ -29,9 +29,9 @@ char* searchType_to_char(SearchType search_type) {
     return buffer;
 }
 
-char* senderType_to_char(SenderType sender_type) {
+char* userType_to_char(UserType user_type) {
     static __thread char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%d", sender_type);
+    snprintf(buffer, sizeof(buffer), "%d", user_type);
     return buffer;
 }
 
@@ -74,11 +74,11 @@ SearchType char_to_searchType(const char* str) {
     return search_type;
 }
 
-SenderType char_to_senderType(const char* str) {
+UserType char_to_userType(const char* str) {
     int val = (int)strtol(str, NULL, 10);
-    static __thread SenderType sender_type;
-    sender_type = (SenderType)val;
-    return sender_type;
+    static __thread UserType user_type;
+    user_type = (UserType)val;
+    return user_type;
 }
 
 size_t char_to_size_t(const char* str) {

@@ -193,7 +193,7 @@ static char** collect_local_search_results(SearchType search_type, const char* s
 static void send_search_request(int peer_fd, requestId reqId, SearchType search_type, const char* search_term) {
     send_argument(peer_fd, operationType_to_char(OP_SEARCH));
     send_argument(peer_fd, reqId_to_char(reqId));
-    send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+    send_argument(peer_fd, userType_to_char(USER_LIBRARY));
     send_argument(peer_fd, searchType_to_char(search_type));
     send_argument(peer_fd, search_term);
     write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
@@ -271,15 +271,15 @@ static char** collect_remote_search_results(requestId reqId, SearchType search_t
     return results;
 }
 
-void handle_search(int socket_fd, requestId reqId, SenderType sender_type, SearchType search_type, const char* search_term) {
-    printf("[Library %u] Handling search request: reqId=%d, sender_type=%d, search_type=%d, search_term=%s\n", global_library_id, reqId, sender_type, search_type, search_term ? search_term : "");
+void handle_search(int socket_fd, requestId reqId, UserType user_type, SearchType search_type, const char* search_term) {
+    printf("[Library %u] Handling search request: reqId=%d, user_type=%d, search_type=%d, search_term=%s\n", global_library_id, reqId, user_type, search_type, search_term ? search_term : "");
 
     size_t local_count = 0;
     char** local_results = collect_local_search_results(search_type, search_term, &local_count);
 
     size_t remote_count = 0;
     char** remote_results = NULL;
-    if (sender_type != SENDER_LIBRARY) {
+    if (user_type != USER_LIBRARY) {
         remote_results = collect_remote_search_results(reqId, search_type, search_term, &remote_count);
     }
 
@@ -370,7 +370,7 @@ static ResultCode borrow_from_remote_libraries(requestId reqId, const char* book
 
         send_argument(peer_fd, operationType_to_char(OP_BORROW));
         send_argument(peer_fd, reqId_to_char(reqId));
-        send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+        send_argument(peer_fd, userType_to_char(USER_LIBRARY));
         send_argument(peer_fd, unsigned_int_to_char(global_library_id));
         send_argument(peer_fd, book_title);
         write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);  // Signal end of transmission
@@ -429,7 +429,7 @@ static ResultCode return_to_remote_libraries(requestId reqId, const char* book_t
 
         send_argument(peer_fd, operationType_to_char(OP_RETURN));
         send_argument(peer_fd, reqId_to_char(reqId));
-        send_argument(peer_fd, senderType_to_char(SENDER_LIBRARY));
+        send_argument(peer_fd, userType_to_char(USER_LIBRARY));
         send_argument(peer_fd, size_t_to_char((size_t)global_library_id));
         send_argument(peer_fd, book_title);
         write(peer_fd, &(char){END_OF_TRANSMISSION}, 1);
@@ -446,13 +446,13 @@ static ResultCode return_to_remote_libraries(requestId reqId, const char* book_t
 }
 
 // TODO: check for who borrowed the book
-void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
-    printf("[Library %u] Handling borrow request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
+void handle_borrow(int socket_fd, requestId reqId, UserType user_type, const char* sender_id, const char* book_title) {
+    printf("[Library %u] Handling borrow request: reqId=%d, user_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, user_type, sender_id, book_title);
 
     ResultCode res_code = RESULT_SUCCESS;
     bool book_found_and_available = false;
 
-    if (sender_type == SENDER_USER) {
+    if (user_type == USER_USER) {
         res_code = check_user_can_borrow(sender_id);
         if (res_code != RESULT_SUCCESS) {
             send_argument(socket_fd, operationType_to_char(OP_ANSWER));
@@ -479,7 +479,7 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
-    if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED && sender_type == SENDER_USER) {
+    if (!book_found_and_available && res_code != ERROR_BOOK_ALREADY_BORROWED && user_type == USER_USER) {
         int library_id = -1;
         res_code = borrow_from_remote_libraries(reqId, book_title, &library_id);
         if (res_code == RESULT_SUCCESS) {
@@ -489,11 +489,12 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
         res_code = ERROR_BOOK_NOT_FOUND;
     }
 
-    if (book_found_and_available && sender_type == SENDER_USER) {
+    if (book_found_and_available && user_type == USER_USER) {
         BorrowedBook record;
         memset(&record, 0, sizeof(record));
         strncpy(record.book.title, book_title, MAX_TITLE_LENGTH - 1);
         strncpy(record.borrowerId, sender_id, MAX_BORROWER_LENGTH - 1);
+        record.borrowerType = user_type;
 
         pthread_mutex_lock(&global_borrowed_book_vector.mutex);
         add_book_to_vector(&global_borrowed_book_vector, &record);
@@ -510,13 +511,13 @@ void handle_borrow(int socket_fd, requestId reqId, SenderType sender_type, const
 
 // TODO: check for who borrowed the book
 // TODO: if borrowed from another library forward the return
-void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const char* sender_id, const char* book_title) {
-    printf("[Library %u] Handling return request: reqId=%d, sender_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, sender_type, sender_id, book_title);
+void handle_return(int socket_fd, requestId reqId, UserType user_type, const char* sender_id, const char* book_title) {
+    printf("[Library %u] Handling return request: reqId=%d, user_type=%d, sender_id=%s, book_title=%s\n", global_library_id, reqId, user_type, sender_id, book_title);
 
     ResultCode res_code = RESULT_FAILURE;
     bool belongs_to_us = false;
 
-    if (sender_type == SENDER_USER) {
+    if (user_type == USER_USER) {
         // 1. Check if user is registered and has borrowed a book
         ResultCode user_check = ERROR_USER_NOT_REGISTERED;
         bool user_has_borrowed = false;
@@ -550,7 +551,9 @@ void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const
         bool borrowed_this_book = false;
         pthread_mutex_lock(&global_borrowed_book_vector.mutex);
         for (size_t i = 0; i < global_borrowed_book_vector.size; ++i) {
-            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 && strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
+            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 &&
+                global_borrowed_book_vector.data[i].borrowerType == user_type &&
+                strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
                 borrowed_this_book = true;
                 break;
             }
@@ -582,16 +585,18 @@ void handle_return(int socket_fd, requestId reqId, SenderType sender_type, const
     }
     pthread_mutex_unlock(&global_book_vector.mutex);
 
-    if (!belongs_to_us && sender_type == SENDER_USER) {
+    if (!belongs_to_us && user_type == USER_USER) {
         res_code = return_to_remote_libraries(reqId, book_title);
-    } else if (!belongs_to_us && sender_type == SENDER_LIBRARY) {
+    } else if (!belongs_to_us && user_type == USER_LIBRARY) {
         res_code = ERROR_BOOK_NOT_FOUND;
     }
 
-    if (res_code == RESULT_SUCCESS && sender_type == SENDER_USER) {
+    if (res_code == RESULT_SUCCESS && user_type == USER_USER) {
         pthread_mutex_lock(&global_borrowed_book_vector.mutex);
         for (size_t i = 0; i < global_borrowed_book_vector.size; ++i) {
-            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 && strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
+            if (strcmp(global_borrowed_book_vector.data[i].borrowerId, sender_id) == 0 &&
+                global_borrowed_book_vector.data[i].borrowerType == user_type &&
+                strcmp(global_borrowed_book_vector.data[i].book.title, book_title) == 0) {
                 BorrowedBook* removed = remove_book_from_vector_borrowed(&global_borrowed_book_vector, i);
                 free(removed);
                 break;
