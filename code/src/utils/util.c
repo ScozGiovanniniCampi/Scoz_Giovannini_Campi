@@ -55,15 +55,15 @@ size_t read_argument(int socket_fd, char** buffer_out) {
     return size;
 }
 
-OperationType read_operator(int socket_fd) {
+int read_operator(int socket_fd) {
     char* buffer = NULL;
     if (read_argument(socket_fd, &buffer) == 0) {  // No data read, return an error code
         if (buffer) {
             free(buffer);
         }
-        return OP_ERROR;  // Indicate an error
+        return -1;  // Indicate an error
     }
-    OperationType op_code = strtol(buffer, NULL, 10);
+    int op_code = (int)strtol(buffer, NULL, 10);
     free(buffer);
     return op_code;
 }
@@ -79,8 +79,15 @@ void cleanupArgs(char*** args, size_t** sizes, size_t counter, char*** args_out,
     *counter_out = 0;
 }
 
-OperationType fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
-    OperationType op_code = read_operator(cfd);
+int fetch_arguments(int cfd, char*** args_out, size_t** sizes_out, int* counter_out) {
+    int op_code = read_operator(cfd);
+
+    if (op_code < 0) {
+        *args_out = NULL;
+        *sizes_out = NULL;
+        *counter_out = 0;
+        return op_code;
+    }
 
     char** args = NULL;
     size_t* sizes = NULL;

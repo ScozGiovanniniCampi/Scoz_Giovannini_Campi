@@ -13,8 +13,7 @@ typedef enum {
     OP_GET_USERS = 6,
     OP_USERS_RESULT = 7,
     OP_GET_BOOKS = 8,
-    OP_BOOKS_RESULT = 9,
-    OP_ERROR = -1
+    OP_BOOKS_RESULT = 9
 } OperationType;
 
 typedef enum {
