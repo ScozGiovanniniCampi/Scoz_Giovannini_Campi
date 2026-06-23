@@ -28,6 +28,4 @@ fi
 # Ensure target directory exists
 mkdir -p "$TARGET_DIR"
 
-tail -n +2 "$FILE" > "$TARGET_DIR/catalog0.csv"
-split -n l/"$LIB_NUMBER" -d --additional-suffix=".csv" "$TARGET_DIR/catalog0.csv" "$TARGET_DIR/catalog"
-rm "$TARGET_DIR/catalog0.csv"
+tail -n +2 "$FILE" | split -n l/"$LIB_NUMBER" -d --additional-suffix=".csv" - "$TARGET_DIR/catalog"
