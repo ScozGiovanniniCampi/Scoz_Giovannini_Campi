@@ -45,7 +45,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
 # Run the built program with the configured library ID, bootstrapping catalogs first.
-run: build clean-sockets clean-user-state
+run: build clean-sockets
 	@echo "Bootstrapping $(NUM_LIBRARIES) libraries from $(BOOKS_FILE) into $(TARGET_DIR)"
 	TARGET_DIR=$(TARGET_DIR) ./bootstrap.sh $(NUM_LIBRARIES) $(BOOKS_FILE)
 	@for id in $$(seq 0 $$(($$(echo $(NUM_LIBRARIES)) - 1))); do \
@@ -66,12 +66,7 @@ lint:
 clean:
 	rm -rf $(BUILD_DIR)
 	$(MAKE) clean-sockets
-	$(MAKE) clean-user-state
 
 # Remove any leftover socket files in /tmp.
 clean-sockets:
 	rm -f /tmp/lib_*.sock
-
-# Remove any leftover user state files in /tmp.
-clean-user-state:
-	rm -rf /tmp/lib_user_state

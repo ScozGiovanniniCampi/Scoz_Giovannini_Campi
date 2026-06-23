@@ -13,7 +13,6 @@ make build
 # Ensure no library processes are running to start with
 pkill -x library || true
 make clean-sockets
-make clean-user-state
 
 # Helper functions for assertions and logging
 declare -a FAILED_TESTS=()
