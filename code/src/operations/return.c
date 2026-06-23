@@ -1,3 +1,4 @@
+/* Expose POSIX interface strdup in string.h. Suppress warning because POSIX macro names begin with a reserved underscore. */
 #define _DEFAULT_SOURCE  // NOLINT(bugprone-reserved-identifier)
 #define _GNU_SOURCE      // NOLINT(bugprone-reserved-identifier)
 
