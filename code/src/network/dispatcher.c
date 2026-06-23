@@ -27,14 +27,20 @@ static int is_counter_valid(OperationType op_code, int counter, char** args) {
         case OP_GET_USERS:
         case OP_GET_BOOKS:
             return counter == 0;
-        case OP_SEARCH_RESULT:
+        case OP_SEARCH_RESULT: {
+            if (counter < 1) {
+                return 0;
+            }
+            int count = (int)strtol(args[0], NULL, 10);
+            return counter == 1 + count;
+        }
         case OP_USERS_RESULT:
         case OP_BOOKS_RESULT: {
             if (counter < 1) {
                 return 0;
             }
             int count = (int)strtol(args[0], NULL, 10);
-            return counter == 1 + count;
+            return counter == 1 + (2 * count);
         }
         default:
             return 1;
