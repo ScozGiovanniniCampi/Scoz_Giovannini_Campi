@@ -69,4 +69,4 @@ clean:
 
 # Remove any leftover socket files in /tmp.
 clean-sockets:
-	rm -f /tmp/lib_*.sock
+	rm -f build/lib_*.sock

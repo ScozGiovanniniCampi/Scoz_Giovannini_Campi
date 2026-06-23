@@ -13,7 +13,7 @@ fi
 USERNAME="$1"
 LIBRARY_ID="$2"
 OPERATION="$3"
-SOCKET_PATH="/tmp/lib_${LIBRARY_ID}.sock"
+SOCKET_PATH="build/lib_${LIBRARY_ID}.sock"
 
 # Verify socket exists
 if [ ! -S "$SOCKET_PATH" ]; then

@@ -6,7 +6,7 @@
 
 #include "messages.h"
 
-#define SOCKET_PATH_TEMPLATE "/tmp/lib_%d.sock"
+#define SOCKET_PATH_TEMPLATE "build/lib_%d.sock"
 
 // Represents a socket handle
 typedef struct {

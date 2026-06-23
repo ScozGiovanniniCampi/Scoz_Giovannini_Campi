@@ -28,7 +28,7 @@ fi
 
 SOCKET_PATHS=()
 for (( i=0; i<LIBRARY_COUNT; i++ )); do
-    SOCKET_PATHS+=("/tmp/lib_${i}.sock")
+    SOCKET_PATHS+=("build/lib_${i}.sock")
 done
 
 # Constants (operation codes, response codes, timeout)
@@ -60,7 +60,6 @@ case "$OPERATION" in
             kill ${RUNNING_LIBRARIES}
         fi
         make clean-sockets
-        make clean-user-state
         exit 0
         ;;
     list_books)
