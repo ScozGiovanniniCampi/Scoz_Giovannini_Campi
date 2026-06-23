@@ -130,7 +130,7 @@ static ResultCode borrow_from_remote_libraries(const char* book_title, int* libr
     return final_result;
 }
 
-static ResultCode check_user_can_borrow(const char* username) {
+static ResultCode check_and_reserve_user_borrow(const char* username) {
     ResultCode code = ERROR_USER_NOT_REGISTERED;
     pthread_mutex_lock(&global_user_vector.mutex);
     for (size_t i = 0; i < global_user_vector.size; ++i) {
@@ -138,6 +138,7 @@ static ResultCode check_user_can_borrow(const char* username) {
             if (global_user_vector.data[i].hasBorrowedBook) {
                 code = ERROR_USER_ALREADY_BORROWED_BOOK;
             } else {
+                global_user_vector.data[i].hasBorrowedBook = true;
                 code = RESULT_SUCCESS;
             }
             break;
@@ -165,7 +166,7 @@ void handle_borrow(int socket_fd, UserType user_type, const char* sender_id, con
     bool book_found_and_available = false;
 
     if (user_type == USER_USER) {
-        res_code = check_user_can_borrow(sender_id);
+        res_code = check_and_reserve_user_borrow(sender_id);
         if (res_code != RESULT_SUCCESS) {
             send_argument(socket_fd, operationType_to_char(OP_ANSWER));
             send_argument(socket_fd, resultCode_to_char(res_code));
@@ -213,8 +214,9 @@ void handle_borrow(int socket_fd, UserType user_type, const char* sender_id, con
         pthread_mutex_lock(&global_borrowed_book_vector.mutex);
         add_book_to_vector(&global_borrowed_book_vector, &record);
         pthread_mutex_unlock(&global_borrowed_book_vector.mutex);
-
-        set_user_borrow_status(sender_id, true);
+    } else if (user_type == USER_USER) {
+        // Revert user borrow status if the book could not be borrowed
+        set_user_borrow_status(sender_id, false);
     }
 
     send_argument(socket_fd, operationType_to_char(OP_ANSWER));
