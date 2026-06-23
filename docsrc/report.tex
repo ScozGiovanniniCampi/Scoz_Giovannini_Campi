@@ -1,36 +1,151 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[11pt, a4paper]{article}
 
-\usepackage[margin=2.5cm]{geometry}
-\usepackage[T1]{fontenc}
+% Packages
 \usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
 \usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{sectsty}
 
-\title{Operating Systems Laboratory Project --- Library}
-\author{Scoz \and Giovannini \and Campi}
+\sectionfont{\large\bfseries}
+\subsectionfont{\normalsize\bfseries}
+
+% Title Configuration
+\title{\textbf{Operating Systems Laboratory Project 2026-1}\\ \Large Distributed Library System Architecture and Design Choices}
+\author{
+    Scoz Roberto (250883) \\
+    Giovannini Lorenzo (252402) \\
+    Campi Davide (253866)
+}
 \date{\today}
 
 \begin{document}
+
 \maketitle
 
-\section{Overview}
-This project implements a distributed library system for the Operating Systems laboratory.
-Multiple library processes cooperate to serve user requests (register, search, borrow, return) and
-to move books between libraries when necessary.
+\begin{abstract}
+This report outlines the architecture, design choices, and implementation details of the distributed library system. The project strictly adheres to the specifications by utilizing UNIX domain sockets for Interprocess Communication (IPC), a multithreaded approach for handling concurrent user requests, and a custom ASCII-framed communication protocol to ensure reliable peer-to-peer data exchange across decentralized library nodes.
+\end{abstract}
 
-\section{Architecture}
-Describe the main processes/components you implemented (libraries, user script, management script)
-and their responsibilities.
+\section{System Architecture Overview}
+The system is designed as a decentralized peer-to-peer network of autonomous library processes. Each library acts simultaneously as a server (handling direct requests from local clients) and as a client (querying other libraries for unavailable books). 
 
-\section{IPC and Protocol}
-State which IPC mechanism you selected (e.g., FIFOs, message queues, sockets) and motivate the
-choice. Summarize the messages/commands exchanged between libraries.
+The system life-cycle is managed by three main bash scripts:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Bootstrapping (\texttt{bootstrap.sh}):} Initializes the system state by parsing the global \texttt{books.csv} file and splits it into multiple files.
+    \item \textbf{User Interface (\texttt{user.sh}):} Acts as the standard client, connecting to specific library sockets to register users, search, borrow, and return books.
+    \item \textbf{Management (\texttt{manage.sh}):} Acts as an administrative tool that queries libraries for live status and utilizes signals for graceful system tear-downs.
+\end{itemize}
 
-\section{Concurrency and Consistency}
-Explain whether requests are handled serially or concurrently, how you keep the system consistent
-(no double lending), and how the required random processing delay is implemented.
+\subsection{Robust Data Ingestion}
+To initialize the catalog, the system implements a custom finite-state CSV parser in C (
+\texttt{parse\_quoted\_field} and \texttt{parse\_unquoted\_field}). Rather than relying on naive \texttt{strtok} 
+implementations which fail on commas within book titles, the parser accurately extracts quoted fields and cleanly maps them to the internal \texttt{BookVector} structures.
 
-\section{Build and Run}
-Document the entry point you provide (\texttt{Makefile} targets \texttt{build/clean/run} or
-\texttt{build.sh}) and a minimal scenario that demonstrates the system.
+\section{Interprocess Communication (IPC) \& Request Dispatching}
+\subsection{UNIX Domain Sockets}
+As mandated by the project specifications, libraries must communicate via an IPC mechanism. We opted for \textbf{UNIX Domain Sockets (\texttt{AF\_UNIX})} combined with stream sockets (\texttt{SOCK\_STREAM}). 
+Since all library processes reside on the same machine, UNIX sockets provide robust, full-duplex communication with significantly lower overhead compared to internet sockets. Unlike FIFOs (named pipes), which require complex read/write synchronization to avoid blocking states during two-way communication, sockets natively support concurrent asynchronous operations. Each library dynamically binds to a unique filepath derived from its ID (e.g., \texttt{./build/lib\_<id>.sock}), making peer discovery and connection routing highly deterministic.
 
+\subsection{Custom Framing Protocol (ASCII ETX/EOT)}
+Instead of relying on null-terminated strings or fixed-size C-structs, which are vulnerable to buffer overflows when transmitting variable-length user inputs—we implemented a custom framing protocol using standard ASCII control characters.
+\begin{itemize}[leftmargin=*]
+    \item \textbf{ETX (End-of-Text, ASCII 3):} acts as the delimiter between individual arguments.
+    \item \textbf{EOT (End-of-Transmission, ASCII 4):} marks the definitive end of a network message.
+\end{itemize}
+This protocol allows the \texttt{fetch\_arguments} parsing engine to dynamically allocate memory via \texttt{realloc} while reading from the socket byte-by-byte, ensuring complete memory safety regardless of the input size. 
+
+\subsection{Payload Validation and Dispatcher}
+To ensure the server does not crash from malformed queries, the core engine relies on a robust dispatcher architecture. Before execution, it sanitizes incoming network payloads using the \texttt{is\_counter\_valid} function, which strictly verifies that the number of dynamically read arguments matches the expected signature of the provided \texttt{OperationType} (e.g., a register operation expects 1 parameter following the operation code, while a borrow operation expects 3). Validated requests are then routed via the \texttt{dispatch\_operation} switchboard to their respective handlers.
+
+\subsection{Protocol Operation Codes}
+The socket communication protocol utilizes specific operation codes to identify the request or response types. Each field in a message is delimited by the ASCII \texttt{ETX} (\texttt{\textbackslash{}x03}) character, and the message is terminated by \texttt{EOT} (\texttt{\textbackslash{}x04}). Table~\ref{tab:op_codes} outlines the detailed operational schemas.
+
+\begin{table}[h!]
+\centering
+\footnotesize
+\begin{tabular}{|c|c|c|l|p{3.2cm}|p{4.2cm}|}
+\hline
+\textbf{Op} & \textbf{Src} & \textbf{Dst} & \textbf{Operation Description} & \textbf{Data Payload Parameters} & \textbf{Message Structure} \\ \hline
+\textbf{0} & All & All & Generic Answer & \texttt{result\_code} & \texttt{0 \textbar{} <result\_code>} \\ \hline
+\textbf{1} & User & Lib & Register with a Library & \texttt{username} & \texttt{1 \textbar{} <username>} \\ \hline
+\textbf{2} & User/Lib & Lib & Search for book in library & \texttt{sender\_type}, \texttt{search\_type}, \texttt{search\_term} & \texttt{2 \textbar{} <sender\_type> \textbar{} <search\_type> \textbar{} <search\_term>} \\ \hline
+\textbf{3} & Lib & User/Lib & Search result book list & \texttt{book\_count}, \texttt{books\_vector} & \texttt{3 \textbar{} <book\_count> \textbar{} <book\_title\_1> \textbar{} ...} \\ \hline
+\textbf{4} & User/Lib & Lib & Borrow book from library & \texttt{sender\_type}, \texttt{username/lib\_id}, \texttt{book\_title} & \texttt{4 \textbar{} <sender\_type> \textbar{} <username/lib\_id> \textbar{} <book\_title>} \\ \hline
+\textbf{5} & User/Lib & Lib & Return book to library & \texttt{sender\_type}, \texttt{username/lib\_id}, \texttt{book\_title} & \texttt{5 \textbar{} <sender\_type> \textbar{} <username/lib\_id> \textbar{} <book\_title>} \\ \hline
+\textbf{6} & Manager & Lib & Request registered users & None & \texttt{6} \\ \hline
+\textbf{7} & Lib & Manager & Return registered users list & \texttt{users\_count}, \texttt{users\_vector} & \texttt{7 \textbar{} <users\_count> \textbar{} <user\_1> \textbar{} <book\_1> \textbar{} ...} \\ \hline
+\textbf{8} & Manager & Lib & Request the book catalogue & None & \texttt{8} \\ \hline
+\textbf{9} & Lib & Manager & Return book catalogue list & \texttt{book\_count}, \texttt{books\_vector} & \texttt{9 \textbar{} <book\_count> \textbar{} <book\_title\_1> \textbar{} <status\_1> \textbar{} ...} \\ \hline
+\end{tabular}
+\caption{Communication Protocol Operation Codes}
+\label{tab:op_codes}
+\end{table}
+
+\subsection{Result and Error Codes}
+The header file \texttt{messages.h} defines the \texttt{ResultCode} enumeration to handle operations outcomes. These numeric values are returned in \texttt{OP\_ANSWER} payloads to signal success or granular error categories:
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{|c|l|l|}
+\hline
+\textbf{Value} & \textbf{Constant Name} & \textbf{Description} \\ \hline
+\textbf{0} & \texttt{RESULT\_SUCCESS} & Operation completed successfully. \\ \hline
+\textbf{1} & \texttt{RESULT\_FAILURE} & Generic operation failure. \\ \hline
+\textbf{2} & \texttt{ERROR\_USER\_NOT\_REGISTERED} & The user is not registered in the library. \\ \hline
+\textbf{3} & \texttt{ERROR\_BOOK\_NOT\_FOUND} & The requested book could not be found. \\ \hline
+\textbf{4} & \texttt{ERROR\_BOOK\_ALREADY\_BORROWED} & The book is already borrowed. \\ \hline
+\textbf{5} & \texttt{ERROR\_USER\_ALREADY\_REGISTERED} & The user is already registered in the library. \\ \hline
+\textbf{6} & \texttt{ERROR\_USER\_ALREADY\_BORROWED\_BOOK} & The user already has an active borrowed book. \\ \hline
+\textbf{7} & \texttt{ERROR\_BOOK\_NOT\_BORROWED} & The book is not currently borrowed. \\ \hline
+\textbf{8} & \texttt{ERROR\_BOOK\_NOT\_BORROWED\_BY\_USER} & The book is not borrowed by the requesting user. \\ \hline
+\textbf{9} & \texttt{ERROR\_USER\_HAS\_NO\_BORROWED\_BOOK} & The user does not have any book currently borrowed. \\ \hline
+\end{tabular}
+\caption{Result and Error Codes (\texttt{ResultCode})}
+\label{tab:error_codes}
+\end{table}
+
+\section{Concurrency and Memory Management}
+\subsection{Thread-Per-Connection Architecture}
+To satisfy the concurrency requirements and the mandatory processing delay, the library server implements a thread-per-connection model using \texttt{pthreads}. Upon accepting a new socket connection, the main loop spawns a detached thread (\texttt{pthread\_detach}) to handle the parsing and execution. 
+
+Crucially, invoking \texttt{pthread\_detach} immediately upon thread creation allows the main process to instantly return to listening for new connections while instructing the operating system to automatically reclaim memory resources when the worker thread finishes, eliminating the need for blocking \texttt{pthread\_join} calls. Inside the thread execution function (\texttt{pthread\_run}), the mandatory simulated processing delay is enforced via a \texttt{sleep((rand() \% 5) + 1)} call prior to executing the operation logic.
+
+\subsection{Data Safety and Shared Vectors}
+Shared global states, such as the catalogs and registered users, are managed via dynamically resizing Vectors (e.g., \texttt{BookVector}, \texttt{RegisteredUserVector}). To prevent race conditions, each Vector struct securely encapsulates its own POSIX Mutex (\texttt{pthread\_mutex\_t}). To maximize concurrency, critical sections are kept intentionally short: data is rapidly copied into thread-local buffers using functions like \texttt{strdup}, and the mutex is unlocked \textit{before} the system engages in slow I/O network operations.
+
+\subsection{Thread-Local Storage (TLS)}
+To ensure thread safety without introducing the performance bottlenecks of global mutexes during network serialization, the protocol relies on the \texttt{\_\_thread} keyword. Formatting functions (e.g., \texttt{resultCode\_to\_char}, \texttt{char\_to\_resultCode}) utilize thread-local static buffers, guaranteeing that concurrent requests cannot overwrite each other's serialized payloads.
+
+\subsection{Use of \texttt{\_Generic} (introduced in C11)}
+To maintain a clean and expressive API for memory management, the project leverages the advanced \texttt{\_Generic} selection macro. By defining macros like \texttt{\#define add\_book\_to\_vector(x, y)}, the system achieves pseudopolymorphism: the compiler automatically routes the function call to either \texttt{add\_book\_to\_vector\_normal} or \texttt{add\_book\_to\_vector\_borrowed} depending entirely on the pointer type of the struct passed to it. 
+
+\section{Distributed Operations and Edge Cases}
+
+The system systematically resolves all operational edge cases defined in the project specification:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Concurrent Borrowing:} If two users try to borrow the same book simultaneously, atomicity is guaranteed by locking \texttt{global\_book\_vector.mutex} before reading or altering the \texttt{BookStatus}. The first thread transitions the book to \texttt{BORROWED}; the second thread subsequently encounters an \texttt{ERROR\_BOOK\_ALREADY\_BORROWED} state.
+    \item \textbf{Borrowing an Unavailable Book:} Handled via granular \texttt{ResultCode} states. If locally lent out, it yields \texttt{ERROR\_BOOK\_ALREADY\_BORROWED}. If missing locally but available remotely, the library successfully proxies the request via \texttt{borrow\_from\_remote\_libraries}, which uses parallel threading (\texttt{borrow\_remote\_library\_thread}) to ping peers. If missing globally, it yields \texttt{ERROR\_BOOK\_NOT\_FOUND}.
+    \item \textbf{User State Violations (Unregistered or Double Borrowing):} Before scanning catalogs, \texttt{handle\_borrow} invokes \texttt{check\_and\_reserve\_user\_borrow}. This checks the user array to prevent unregistered borrowing (\texttt{ERROR\_USER\_NOT\_REGISTERED}) and evaluates the \texttt{hasBorrowedBook} flag to prevent multiple active loans (\texttt{ERROR\_USER\_ALREADY\_BORROWED\_BOOK}). If the book is not ultimately found, the status is safely reverted using \texttt{set\_user\_borrow\_status(sender\_id, false)}.
+    \item \textbf{Invalid Returns (Not Borrowed / Already Returned):} \texttt{handle\_return} relies on\\ \texttt{validate\_returning\_user} and \texttt{check\_borrowed\_specific\_book}. It verifies the user currently holds a book and that the specific title matches their active loan, returning\\ \texttt{ERROR\_USER\_HAS\_NO\_BORROWED\_BOOK} or \texttt{ERROR\_BOOK\_NOT\_BORROWED\_BY\_USER} otherwise.
+    \item \textbf{Returning to the Wrong Library:} The \texttt{BorrowedBook} struct actively logs the \texttt{ownerLibraryId} obtained during the borrowing process. If a user returns a book to a different library node, the backend identifies the mismatch via \texttt{try\_return\_local\_book} and seamlessly forwards the \texttt{OP\_RETURN} request to the original owner via \texttt{return\_to\_specific\_library}, fulfilling the specification's requirement.
+    \item \textbf{Circular Queries and Infinite Loops:} Instead of a strict Time-To-Live (TTL) counter, the system utilizes the \texttt{UserType} tag (\texttt{USER\_USER} vs \texttt{USER\_LIBRARY}). Libraries only proxy search/borrow requests to peers if the request originated directly from a \texttt{USER\_USER}. Proxy requests arrive tagged as \texttt{USER\_LIBRARY}, instructing the receiving peer to only search locally and never forward it again, mathematically preventing infinite routing loops.
+    \item \textbf{Advanced Pattern Matching:} The \texttt{handle\_search} functionality implements recursive wildcard matching (supporting \texttt{*}, \texttt{?}, and escape characters \texttt{$\backslash$*, $\backslash$?, $\backslash\backslash$}) via the \texttt{match\_wildcard} function for sophisticated querying across titles, authors, and publication years. 
+\end{itemize}
+
+\section{Compilation, Execution and Build System}
+To automate the deployment and ensure reproducibility, the project relies on a robust \texttt{Makefile} that implements all the required targets:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Compilation (\texttt{make build}):} The code is compiled using \texttt{gcc}. To enforce high code quality and safety, strict compiler flags (\texttt{-Wall -Wextra -Werror}) are utilized alongside the C11 standard (\texttt{-std=c11}) and addictional flags (\texttt{-D\_POSIX\_C\_SOURCE=200809L -pthread}) to expose POSIX interfaces.
+    \item \textbf{Execution (\texttt{make run}):} This target orchestrates a complete testing scenario. It delegates the catalog initialization to the \texttt{bootstrap.sh} script, dynamically spawns the requested number of library instances as background processes, and tracks them continuously. To ensure a fresh and up-to-date environment, this command also implicitly triggers \texttt{make clean} and \texttt{make build} before executing.
+    \item \textbf{Cleanup (\texttt{make clean}):} Ensures the system is restored to a original state by deleting the \texttt{build/} directory and unlinking any remaining IPC UNIX sockets, preventing \texttt{EADDRINUSE} errors during subsequent executions.
+    \item \textbf{Format (\texttt{make format}):} The code is formatted following a predefined standard (using \texttt{clang-format}) to ensure clean and readable code.
+    \item \textbf{Lint (\texttt{make lint}):} The source files are analyzed statically (using \texttt{clang-tidy}) to detect potential bugs, style violations, and programming errors.
+\end{itemize}
 \end{document}
