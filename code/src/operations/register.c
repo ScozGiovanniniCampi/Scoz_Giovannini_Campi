@@ -1,5 +1,5 @@
-#define _DEFAULT_SOURCE // NOLINT(bugprone-reserved-identifier)
-#define _GNU_SOURCE     // NOLINT(bugprone-reserved-identifier)
+#define _DEFAULT_SOURCE  // NOLINT(bugprone-reserved-identifier)
+#define _GNU_SOURCE      // NOLINT(bugprone-reserved-identifier)
 
 #include <pthread.h>
 #include <stdio.h>
